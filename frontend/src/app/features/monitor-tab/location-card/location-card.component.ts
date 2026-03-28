@@ -22,7 +22,7 @@ const SCRAPER_ICONS: Record<string, string> = {
           <h3 class="font-semibold text-white truncate">{{ location.name }}</h3>
           <p class="text-xs text-slate-400 mt-0.5">
             <span *ngIf="location.last_checked">
-              Checked {{ location.last_checked | date:'MMM d, h:mm a':'America/Los_Angeles' }}
+              Checked {{ location.last_checked | date:'h:mm a':'America/Los_Angeles' }}
             </span>
             <span *ngIf="!location.last_checked">Not yet checked</span>
             <span *ngIf="location.last_found" class="ml-2 text-green-400">
