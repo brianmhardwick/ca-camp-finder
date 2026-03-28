@@ -17,21 +17,7 @@ services:
     image: ghcr.io/brianmhardwick/ca-camp-finder-frontend:latest
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "127.0.0.1:8088:80"   # local only — Caddy reverse proxies to this port
     depends_on:
       backend:
         condition: service_healthy
-
-  watchtower:
-    image: containrrr/watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      # Mount Docker config so Watchtower can auth to ghcr.io
-      - /root/.docker/config.json:/config.json:ro
-    environment:
-      - WATCHTOWER_POLL_INTERVAL=300       # check every 5 minutes
-      - WATCHTOWER_CLEANUP=true            # remove old images after update
-      - WATCHTOWER_INCLUDE_RESTARTING=true
-      - WATCHTOWER_LABEL_ENABLE=false      # watch all containers
-    command: --interval 300 --cleanup
