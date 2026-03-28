@@ -60,16 +60,35 @@ cp .env.example .env
 nano .env   # add your Pushover keys
 ```
 
-### 4. Start the stack
+### 4. Add Caddy reverse proxy config
+
+Add this block to your Caddyfile (replace `camps.yourdomain.com`):
+
+```
+camps.yourdomain.com {
+    # API calls go directly to the backend
+    handle /api/* {
+        reverse_proxy localhost:8089
+    }
+    # Everything else is served by the Angular nginx container
+    handle {
+        reverse_proxy localhost:8088
+    }
+}
+```
+
+Then reload Caddy: `caddy reload` (or `docker exec caddy caddy reload --config /etc/caddy/Caddyfile` if Caddy is containerized).
+
+### 5. Start the stack
 
 ```bash
 mkdir -p data
 docker compose up -d
 ```
 
-Visit `http://<pi-ip>` in your browser. The UI loads immediately; first availability check runs after the initial interval.
+Visit your configured domain. The UI loads immediately; first availability check runs after the initial interval.
 
-### 5. Verify Pushover
+### 6. Verify Pushover
 
 In the Monitor tab, tap **Test Alert** — you should receive a test notification on your iPhone within seconds.
 

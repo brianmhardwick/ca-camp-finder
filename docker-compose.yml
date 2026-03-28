@@ -6,6 +6,8 @@ services:
       - ./data:/data
     env_file:
       - .env
+    ports:
+      - "127.0.0.1:8089:8000"  # local only — Caddy proxies /api/* here directly
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -17,7 +19,7 @@ services:
     image: ghcr.io/brianmhardwick/ca-camp-finder-frontend:latest
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8088:80"   # local only — Caddy reverse proxies to this port
+      - "127.0.0.1:8088:80"   # local only — Caddy proxies static files here
     depends_on:
       backend:
         condition: service_healthy
