@@ -66,11 +66,10 @@ Append this block to `/opt/docker/caddy/Caddyfile` — same pattern as Immich:
 
 ```
 # CA Camp Finder
-http://camps.thewick.me {
+camps.thewick.me {
     handle /api/* {
         reverse_proxy 192.168.1.124:8089 {
             header_up Host {host}
-            header_up X-Forwarded-Host {host}
             header_up X-Forwarded-Proto https
             header_up X-Forwarded-Port 443
         }
@@ -78,7 +77,6 @@ http://camps.thewick.me {
     handle {
         reverse_proxy 192.168.1.124:8088 {
             header_up Host {host}
-            header_up X-Forwarded-Host {host}
             header_up X-Forwarded-Proto https
             header_up X-Forwarded-Port 443
         }
