@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM python:3.12-slim AS base
+FROM python:3.12-slim-bookworm AS base
 
 # Install system deps needed by Playwright/Chromium
 RUN apt-get update && apt-get install -y --no-install-recommends \
