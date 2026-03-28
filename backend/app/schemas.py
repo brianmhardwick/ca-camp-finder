@@ -1,8 +1,15 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
+
+
+def _utc(v: Optional[datetime]) -> Optional[datetime]:
+    """Attach UTC to naive datetimes (SQLite returns naive even for tz columns)."""
+    if v is not None and v.tzinfo is None:
+        return v.replace(tzinfo=timezone.utc)
+    return v
 
 
 class LocationResponse(BaseModel):
@@ -16,6 +23,11 @@ class LocationResponse(BaseModel):
     last_found: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
+
+    @field_validator("last_checked", "last_found", mode="before")
+    @classmethod
+    def ensure_utc(cls, v):
+        return _utc(v)
 
 
 class LocationToggle(BaseModel):
@@ -36,6 +48,11 @@ class AvailabilityLogResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("detected_at", mode="before")
+    @classmethod
+    def ensure_utc(cls, v):
+        return _utc(v)
+
 
 class CheckLogResponse(BaseModel):
     id: int
@@ -47,6 +64,11 @@ class CheckLogResponse(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("checked_at", mode="before")
+    @classmethod
+    def ensure_utc(cls, v):
+        return _utc(v)
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -55,6 +77,11 @@ class HealthResponse(BaseModel):
     last_check: Optional[datetime]
     next_check: Optional[datetime]
     current_interval_minutes: int
+
+    @field_validator("last_check", "next_check", mode="before")
+    @classmethod
+    def ensure_utc(cls, v):
+        return _utc(v)
 
 
 class SettingsResponse(BaseModel):
