@@ -4,9 +4,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import Location, CheckLog
 from app.schemas import LocationResponse, LocationToggle
+from app.scheduler.windows import get_interval_for_scraper_type
 
 router = APIRouter(prefix="/api/locations", tags=["locations"])
 
@@ -45,6 +47,7 @@ def list_locations(db: Session = Depends(get_db)):
             booking_url=loc.booking_url,
             last_checked=_last_checked(loc, db),
             last_found=_last_found(loc, db),
+            is_peak=get_interval_for_scraper_type(loc.scraper_type) == settings.peak_window_interval,
         )
         for loc in locations
     ]
@@ -75,4 +78,5 @@ def toggle_location(slug: str, body: LocationToggle, db: Session = Depends(get_d
         booking_url=location.booking_url,
         last_checked=_last_checked(location, db),
         last_found=_last_found(location, db),
+        is_peak=get_interval_for_scraper_type(location.scraper_type) == settings.peak_window_interval,
     )

@@ -7,6 +7,7 @@ const SCRAPER_ICONS: Record<string, string> = {
   reserveca: '⛺',
   crystal_pier: '🏖️',
   crystal_cove: '🌊',
+  campland: '🏕️',
 };
 
 @Component({
@@ -20,13 +21,17 @@ const SCRAPER_ICONS: Record<string, string> = {
         <span class="text-2xl shrink-0">{{ icon }}</span>
         <div class="min-w-0">
           <h3 class="font-semibold text-white truncate">{{ location.name }}</h3>
-          <p class="text-xs text-slate-400 mt-0.5">
+          <p class="text-xs text-slate-400 mt-0.5 flex items-center gap-1.5">
             <span *ngIf="location.last_checked">
               Checked {{ location.last_checked | date:'h:mm a':'America/Los_Angeles' }}
             </span>
             <span *ngIf="!location.last_checked">Not yet checked</span>
-            <span *ngIf="location.last_found" class="ml-2 text-green-400">
+            <span *ngIf="location.last_found" class="text-green-400">
               · Found {{ location.last_found | date:'MMM d':'America/Los_Angeles' }}
+            </span>
+            <span *ngIf="location.is_peak"
+                  class="ml-1 px-1.5 py-0.5 rounded text-amber-400 bg-amber-900/40 border border-amber-700/50 text-[10px] font-medium leading-none">
+              ⚡ peak
             </span>
           </p>
         </div>

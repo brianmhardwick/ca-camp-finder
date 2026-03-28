@@ -21,6 +21,7 @@ class LocationResponse(BaseModel):
     booking_url: str
     last_checked: Optional[datetime] = None
     last_found: Optional[datetime] = None
+    is_peak: bool = False
 
     model_config = {"from_attributes": True}
 

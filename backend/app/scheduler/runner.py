@@ -11,8 +11,7 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.config import settings
-from app.scheduler.windows import get_interval_for_scraper_type, get_current_interval
+from app.scheduler.windows import get_interval_for_scraper_type, get_current_interval, _now_pacific
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +37,29 @@ def get_next_check() -> Optional[datetime]:
 
 
 def get_target_dates() -> list[date]:
-    """Return all Fri/Sat/Sun dates within the scan window."""
-    today = date.today()
-    target = []
-    for i in range(settings.scan_days_ahead):
-        d = today + timedelta(days=i)
-        if d.weekday() in (4, 5, 6):  # Fri=4, Sat=5, Sun=6
-            target.append(d)
-    return target
+    """Return the next 2 weekends (Fri/Sat/Sun × 2 = 6 dates) in Pacific time.
+
+    After Friday 9 AM Pacific the current weekend is unactionable (too late to
+    realistically book and drive), so we pivot to next weekend. Saturday and
+    Sunday also skip the current weekend.
+    """
+    now = _now_pacific()
+    today = now.date()
+    weekday = today.weekday()  # 0=Mon … 6=Sun
+
+    too_late_for_current = (weekday == 4 and now.hour >= 9) or weekday in (5, 6)
+
+    if weekday == 4 and not too_late_for_current:
+        next_fri = today  # Friday before 9 AM — current weekend starts today
+    else:
+        days_ahead = (4 - weekday) % 7 or 7  # days until next Friday (0 → 7 if already Fri)
+        next_fri = today + timedelta(days=days_ahead)
+
+    dates = []
+    for week in range(2):
+        fri = next_fri + timedelta(weeks=week)
+        dates.extend([fri, fri + timedelta(days=1), fri + timedelta(days=2)])
+    return dates
 
 
 async def run_check_for_location(location_id: int):
@@ -57,12 +71,14 @@ async def run_check_for_location(location_id: int):
     from app.scrapers.reservecalifornia import ReserveCaliforniaScraper
     from app.scrapers.crystal_pier import CrystalPierScraper
     from app.scrapers.crystal_cove import CrystalCoveScraper
+    from app.scrapers.campland import CamplandScraper
     from app.notifications.pushover import send_availability_alert
 
     scraper_map = {
         "reserveca": ReserveCaliforniaScraper,
         "crystal_pier": CrystalPierScraper,
         "crystal_cove": CrystalCoveScraper,
+        "campland": CamplandScraper,
     }
 
     dates = get_target_dates()

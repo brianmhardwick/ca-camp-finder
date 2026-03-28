@@ -10,6 +10,11 @@ Crystal Pier Hotel 7-day cancellation policy:
 - Cancel 7+ days before check-in → full refund
 - Cancel within 7 days → $50 fee; within 48 hours → forfeit first night
 Peak days: Fri/Sat/Sun all day (7-day deadline for Fri/Sat/Sun arrivals), evenings daily.
+
+Campland on the Bay 72-hour cancellation policy:
+- Cancel 72+ hours before arrival → refund minus $30 fee
+- Cancel within 72 hours → forfeit first night
+Peak days: Tue/Wed/Thu all day (72-hr deadline for Fri/Sat/Sun arrivals), evenings daily.
 """
 from datetime import datetime
 import pytz
@@ -70,10 +75,31 @@ def _is_crystal_pier_peak() -> bool:
     return False
 
 
+def _is_campland_peak() -> bool:
+    """Peak window for Campland on the Bay (72-hour cancellation policy).
+
+    72-hour deadlines: Tue → Fri check-ins, Wed → Sat, Thu → Sun.
+    So Tue/Wed/Thu all day are peak.
+    """
+    now = _now_pacific()
+    hour = now.hour
+    weekday = now.weekday()  # 1=Tue, 2=Wed, 3=Thu
+
+    if 18 <= hour < 23:
+        return True
+
+    if weekday in (1, 2, 3):
+        return True
+
+    return False
+
+
 def get_interval_for_scraper_type(scraper_type: str) -> int:
     """Return the check interval in minutes for the given scraper type."""
     if scraper_type == "crystal_pier":
         return settings.peak_window_interval if _is_crystal_pier_peak() else settings.default_check_interval
+    if scraper_type == "campland":
+        return settings.peak_window_interval if _is_campland_peak() else settings.default_check_interval
     # reserveca, crystal_cove, and any unknown types use CA parks logic
     return settings.peak_window_interval if _is_ca_parks_peak() else settings.default_check_interval
 
@@ -82,4 +108,5 @@ def get_current_interval() -> int:
     """Return the minimum active interval across all scraper types (used by health endpoint)."""
     ca_interval = settings.peak_window_interval if _is_ca_parks_peak() else settings.default_check_interval
     pier_interval = settings.peak_window_interval if _is_crystal_pier_peak() else settings.default_check_interval
-    return min(ca_interval, pier_interval)
+    campland_interval = settings.peak_window_interval if _is_campland_peak() else settings.default_check_interval
+    return min(ca_interval, pier_interval, campland_interval)

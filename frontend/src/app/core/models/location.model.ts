@@ -7,4 +7,5 @@ export interface Location {
   booking_url: string;
   last_checked: string | null;
   last_found: string | null;
+  is_peak: boolean;
 }
