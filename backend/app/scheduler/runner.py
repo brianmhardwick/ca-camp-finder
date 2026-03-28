@@ -36,11 +36,17 @@ def get_next_check() -> Optional[datetime]:
     return min(_location_next_check.values())
 
 
-def get_target_dates(scraper_type: str = "") -> list[date]:
-    """Return Fri+Sat for the next 2 weekends (4 dates) in Pacific time.
+def _is_crystal_pier_summer() -> bool:
+    """True mid-June through September — Crystal Pier 3-night minimum window."""
+    today = _now_pacific().date()
+    return (today.month == 6 and today.day >= 15) or today.month in (7, 8, 9)
 
-    For scrapers requiring a 3-night minimum (campland), returns Thu+Fri instead
-    so the check-in window covers a full Thu→Sun or Fri→Mon stay.
+
+def get_target_dates(scraper_type: str = "") -> list[date]:
+    """Return check-in dates for the next 2 weekends in Pacific time.
+
+    Standard (1–2 night): Fri + Sat per weekend (4 dates total).
+    Crystal Pier in summer (3-night min, mid-Jun–Sep): Thu + Fri per weekend.
 
     After Friday 9 AM Pacific the current weekend is unactionable, so we pivot
     to the following weekend. Saturday and Sunday also skip the current weekend.
@@ -57,7 +63,7 @@ def get_target_dates(scraper_type: str = "") -> list[date]:
         days_ahead = (4 - weekday) % 7 or 7
         next_fri = today + timedelta(days=days_ahead)
 
-    three_night = scraper_type == "campland"
+    three_night = scraper_type == "crystal_pier" and _is_crystal_pier_summer()
     dates = []
     for week in range(2):
         fri = next_fri + timedelta(weeks=week)
