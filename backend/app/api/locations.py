@@ -52,12 +52,20 @@ def list_locations(db: Session = Depends(get_db)):
 
 @router.patch("/{slug}", response_model=LocationResponse)
 def toggle_location(slug: str, body: LocationToggle, db: Session = Depends(get_db)):
+    from app.scheduler.runner import add_location_job, remove_location_job
+
     location = db.query(Location).filter(Location.slug == slug).first()
     if not location:
         raise HTTPException(status_code=404, detail="Location not found")
     location.enabled = body.enabled
     db.commit()
     db.refresh(location)
+
+    if body.enabled:
+        add_location_job(location)
+    else:
+        remove_location_job(location.slug)
+
     return LocationResponse(
         id=location.id,
         name=location.name,
