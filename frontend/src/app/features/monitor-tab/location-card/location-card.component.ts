@@ -15,25 +15,23 @@ const SCRAPER_ICONS: Record<string, string> = {
   imports: [CommonModule, DatePipe, ToggleComponent],
   template: `
     <div class="card flex items-center justify-between gap-4"
-         [class.opacity-50]="!location.enabled">
+         [class.opacity-40]="!location.enabled">
       <div class="flex items-center gap-3 min-w-0">
         <span class="text-2xl shrink-0">{{ icon }}</span>
         <div class="min-w-0">
-          <h3 class="font-semibold text-slate-900 truncate">{{ location.name }}</h3>
+          <h3 class="font-semibold text-white truncate">{{ location.name }}</h3>
           <p class="text-xs text-slate-400 mt-0.5">
             <span *ngIf="location.last_checked">
-              Checked {{ location.last_checked | date:'h:mm a' }}
+              Checked {{ location.last_checked | date:'h:mm a':'America/Los_Angeles' }}
             </span>
             <span *ngIf="!location.last_checked">Not yet checked</span>
-            <span *ngIf="location.last_found" class="ml-2 text-green-600">
-              · Found {{ location.last_found | date:'MMM d' }}
+            <span *ngIf="location.last_found" class="ml-2 text-green-400">
+              · Found {{ location.last_found | date:'MMM d':'America/Los_Angeles' }}
             </span>
           </p>
         </div>
       </div>
       <div class="flex items-center gap-3 shrink-0">
-        <a [href]="location.booking_url" target="_blank" rel="noopener"
-           class="text-xs text-ocean-600 hover:underline">Book</a>
         <app-toggle
           [checked]="location.enabled"
           (checkedChange)="toggled.emit($event)"

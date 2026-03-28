@@ -1,4 +1,4 @@
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -35,8 +35,8 @@ class AvailabilityLog(Base):
     unit_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     unit_type: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     price_per_night: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 2), nullable=True)
-    detected_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
-    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     booking_url: Mapped[str] = mapped_column(String, nullable=False)
     still_available: Mapped[bool] = mapped_column(Boolean, default=True)
 
@@ -48,7 +48,7 @@ class CheckLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     location_id: Mapped[int] = mapped_column(Integer, ForeignKey("locations.id"), nullable=False)
-    checked_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     status: Mapped[str] = mapped_column(String, nullable=False)  # ok, error, no_availability
     units_found: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

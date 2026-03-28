@@ -14,11 +14,11 @@ import { LocationCardComponent } from './location-card/location-card.component';
       <!-- Header bar -->
       <div class="flex items-center justify-between">
         <div>
-          <p class="text-sm text-slate-500">
+          <p class="text-sm text-slate-400">
             <span *ngIf="health">
               {{ health.locations_enabled }} active · {{ health.total_found_today }} found today
               <span *ngIf="health.next_check" class="ml-2">
-                · Next check {{ health.next_check | date:'h:mm a' }}
+                · Next check {{ health.next_check | date:'h:mm a':'America/Los_Angeles' }}
               </span>
             </span>
           </p>
@@ -37,17 +37,17 @@ import { LocationCardComponent } from './location-card/location-card.component';
       <div *ngIf="health" class="flex items-center gap-2 text-xs">
         <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full"
               [class]="health.current_interval_minutes <= 15
-                ? 'bg-amber-100 text-amber-700'
-                : 'bg-green-100 text-green-700'">
+                ? 'bg-amber-900/40 text-amber-400 border border-amber-700/50'
+                : 'bg-green-900/40 text-green-400 border border-green-700/50'">
           <span class="w-1.5 h-1.5 rounded-full inline-block"
-                [class]="health.current_interval_minutes <= 15 ? 'bg-amber-500' : 'bg-green-500'"></span>
+                [class]="health.current_interval_minutes <= 15 ? 'bg-amber-400' : 'bg-green-400'"></span>
           {{ health.current_interval_minutes <= 15 ? 'Peak window' : 'Standard' }} ·
           Every {{ health.current_interval_minutes }}m
         </span>
       </div>
 
       <!-- Error -->
-      <div *ngIf="error" class="bg-red-50 text-red-700 text-sm rounded-lg px-4 py-3">
+      <div *ngIf="error" class="bg-red-900/40 text-red-400 text-sm rounded-lg px-4 py-3 border border-red-700/50">
         {{ error }}
       </div>
 
@@ -62,15 +62,15 @@ import { LocationCardComponent } from './location-card/location-card.component';
 
       <ng-template #skeleton>
         <div *ngFor="let i of [1,2,3,4,5,6]" class="card animate-pulse">
-          <div class="h-4 bg-slate-200 rounded w-2/3 mb-2"></div>
-          <div class="h-3 bg-slate-100 rounded w-1/3"></div>
+          <div class="h-4 bg-navy-700 rounded w-2/3 mb-2"></div>
+          <div class="h-3 bg-navy-700 rounded w-1/3"></div>
         </div>
       </ng-template>
 
       <!-- Toast -->
       <div *ngIf="toast"
-           class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-sm
-                  px-5 py-3 rounded-xl shadow-lg z-50 transition-all">
+           class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-navy-700 text-white text-sm
+                  px-5 py-3 rounded-xl shadow-lg border border-navy-600 z-50 transition-all">
         {{ toast }}
       </div>
     </div>

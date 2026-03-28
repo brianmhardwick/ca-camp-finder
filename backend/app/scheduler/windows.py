@@ -1,12 +1,16 @@
 """
-Intelligent cancellation window logic.
+Intelligent cancellation window logic based on CA State Parks 48-hour policy.
 
-Cancellation patterns observed for campgrounds / boutique hotels:
-- 48–72 hrs before check-in: people finalize plans and cancel
-- 6 PM – 11 PM any day: evening decision-making window
-- Thursday before a weekend: highest-volume last-minute window
+Reserve California cancellation rules:
+- Cancel 2+ days before check-in → refund minus $7.99 service fee
+- Cancel within 48 hours → forfeit first night + $7.99 fee
 
-During these windows the scheduler reduces its interval to PEAK_WINDOW_INTERVAL.
+Peak windows (check every 15 min instead of 60):
+- Tuesday 6–11 PM: People deliberating about upcoming Fri–Sun weekend
+- Wednesday all day: Deadline day for Friday check-ins (heaviest volume)
+- Thursday all day: Deadline day for Saturday check-ins
+- Friday 6 AM–noon: Last-minute cancellations for Sat/Sun (penalty accepted)
+- Every day 6–11 PM: General evening decision-making window
 """
 from datetime import datetime, date, timedelta
 import pytz
@@ -20,37 +24,27 @@ def _now_pacific() -> datetime:
     return datetime.now(tz=PACIFIC)
 
 
-def _upcoming_fridays(weeks: int = 12) -> list[date]:
-    """Return the next `weeks` Fridays from today."""
-    today = _now_pacific().date()
-    fridays = []
-    for i in range(weeks * 7):
-        d = today + timedelta(days=i)
-        if d.weekday() == 4:  # Friday
-            fridays.append(d)
-            if len(fridays) >= weeks:
-                break
-    return fridays
-
-
 def is_peak_window() -> bool:
     """Return True if now is within a high-probability cancellation window."""
     now = _now_pacific()
-    today = now.date()
     hour = now.hour
+    weekday = now.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
 
-    # Evening window: 6 PM – 11 PM local time every day
+    # Evening window every day 6–11 PM
     if 18 <= hour < 23:
         return True
 
-    # 48–72 hour window before each upcoming Friday
-    for friday in _upcoming_fridays(weeks=8):
-        delta = (friday - today).days
-        if 2 <= delta <= 3:  # 2–3 days out = 48–72 hours
-            return True
-        # Thursday morning + afternoon is also peak
-        if delta == 1 and hour < 20:
-            return True
+    # Wednesday all day: 48-hr deadline for Friday check-ins
+    if weekday == 2:
+        return True
+
+    # Thursday all day: 48-hr deadline for Saturday check-ins
+    if weekday == 3:
+        return True
+
+    # Friday morning: last-minute cancellations for Sat/Sun
+    if weekday == 4 and hour < 12:
+        return True
 
     return False
 
