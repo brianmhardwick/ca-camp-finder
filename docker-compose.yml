@@ -1,0 +1,37 @@
+services:
+  backend:
+    image: ghcr.io/brianmhardwick/ca-camp-finder-backend:latest
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    image: ghcr.io/brianmhardwick/ca-camp-finder-frontend:latest
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  watchtower:
+    image: containrrr/watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Mount Docker config so Watchtower can auth to ghcr.io
+      - /root/.docker/config.json:/config.json:ro
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=300       # check every 5 minutes
+      - WATCHTOWER_CLEANUP=true            # remove old images after update
+      - WATCHTOWER_INCLUDE_RESTARTING=true
+      - WATCHTOWER_LABEL_ENABLE=false      # watch all containers
+    command: --interval 300 --cleanup

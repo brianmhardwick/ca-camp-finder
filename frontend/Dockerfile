@@ -1,0 +1,23 @@
+# syntax=docker/dockerfile:1
+
+# ---- Build stage ----
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --prefer-offline
+
+COPY . .
+RUN npm run build -- --configuration production
+
+# ---- Runtime stage ----
+FROM nginx:1.27-alpine AS runtime
+
+COPY --from=build /app/dist/frontend/browser /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+# Remove default nginx config
+RUN rm -f /etc/nginx/conf.d/default.conf.bak
+
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
