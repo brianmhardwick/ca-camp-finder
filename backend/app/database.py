@@ -84,8 +84,8 @@ _SEED_DATA = [
         "slug": "san_onofre_san_mateo",
         "scraper_type": "reserveca",
         "enabled": True,
-        "booking_url": "https://www.reservecalifornia.com/Web/#!park/618",
-        "scraper_config": '{"facility_id": 618, "unit_type_id": 29}',
+        "booking_url": "https://www.reservecalifornia.com/Web/#!park/712/686",
+        "scraper_config": '{"facility_id": 686, "unit_type_id": 29}',
     },
     {
         "name": "Campland on the Bay",
