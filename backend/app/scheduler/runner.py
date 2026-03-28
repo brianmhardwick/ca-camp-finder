@@ -36,12 +36,14 @@ def get_next_check() -> Optional[datetime]:
     return min(_location_next_check.values())
 
 
-def get_target_dates() -> list[date]:
-    """Return the next 2 weekends (Fri/Sat/Sun × 2 = 6 dates) in Pacific time.
+def get_target_dates(scraper_type: str = "") -> list[date]:
+    """Return Fri+Sat for the next 2 weekends (4 dates) in Pacific time.
 
-    After Friday 9 AM Pacific the current weekend is unactionable (too late to
-    realistically book and drive), so we pivot to next weekend. Saturday and
-    Sunday also skip the current weekend.
+    For scrapers requiring a 3-night minimum (campland), returns Thu+Fri instead
+    so the check-in window covers a full Thu→Sun or Fri→Mon stay.
+
+    After Friday 9 AM Pacific the current weekend is unactionable, so we pivot
+    to the following weekend. Saturday and Sunday also skip the current weekend.
     """
     now = _now_pacific()
     today = now.date()
@@ -52,13 +54,19 @@ def get_target_dates() -> list[date]:
     if weekday == 4 and not too_late_for_current:
         next_fri = today  # Friday before 9 AM — current weekend starts today
     else:
-        days_ahead = (4 - weekday) % 7 or 7  # days until next Friday (0 → 7 if already Fri)
+        days_ahead = (4 - weekday) % 7 or 7
         next_fri = today + timedelta(days=days_ahead)
 
+    three_night = scraper_type == "campland"
     dates = []
     for week in range(2):
         fri = next_fri + timedelta(weeks=week)
-        dates.extend([fri, fri + timedelta(days=1), fri + timedelta(days=2)])
+        if three_night:
+            # Thu + Fri check-ins for 3-night stays (Thu→Sun, Fri→Mon)
+            dates.extend([fri - timedelta(days=1), fri])
+        else:
+            # Fri + Sat check-ins for 1–2 night stays
+            dates.extend([fri, fri + timedelta(days=1)])
     return dates
 
 
@@ -81,7 +89,6 @@ async def run_check_for_location(location_id: int):
         "campland": CamplandScraper,
     }
 
-    dates = get_target_dates()
     db = SessionLocal()
 
     try:
@@ -98,6 +105,7 @@ async def run_check_for_location(location_id: int):
             return
 
         try:
+            dates = get_target_dates(location.scraper_type)
             scraper = scraper_cls(location)
             results = await scraper.check_availability(dates)
 

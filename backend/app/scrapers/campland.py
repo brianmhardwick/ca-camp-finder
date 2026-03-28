@@ -56,9 +56,9 @@ class CamplandScraper(BaseScraper):
         """Navigate to Campland booking page and check availability for a date."""
         from playwright.async_api import TimeoutError as PlaywrightTimeout
 
-        # Campland uses a checkout date of check_in + 2 (minimum 2-night stay on weekends)
+        # Campland requires a 3-night minimum on weekends
         from datetime import timedelta
-        check_out = check_in + timedelta(days=2)
+        check_out = check_in + timedelta(days=3)
 
         url = (
             f"{CAMPLAND_BOOKING_URL}"
