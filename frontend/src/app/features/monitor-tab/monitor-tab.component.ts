@@ -33,19 +33,6 @@ import { LocationCardComponent } from './location-card/location-card.component';
         </div>
       </div>
 
-      <!-- Status badge -->
-      <div *ngIf="health" class="flex items-center gap-2 text-xs">
-        <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full"
-              [class]="health.current_interval_minutes <= 15
-                ? 'bg-amber-900/40 text-amber-400 border border-amber-700/50'
-                : 'bg-green-900/40 text-green-400 border border-green-700/50'">
-          <span class="w-1.5 h-1.5 rounded-full inline-block"
-                [class]="health.current_interval_minutes <= 15 ? 'bg-amber-400' : 'bg-green-400'"></span>
-          {{ health.current_interval_minutes <= 15 ? 'Peak window' : 'Standard' }} ·
-          Every {{ health.current_interval_minutes }}m
-        </span>
-      </div>
-
       <!-- Error -->
       <div *ngIf="error" class="bg-red-900/40 text-red-400 text-sm rounded-lg px-4 py-3 border border-red-700/50">
         {{ error }}
