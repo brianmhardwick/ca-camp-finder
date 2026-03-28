@@ -62,33 +62,53 @@ nano .env   # add your Pushover keys
 
 ### 4. Add Caddy reverse proxy config
 
-Add this block to your Caddyfile (replace `camps.yourdomain.com`):
+Append this block to `/opt/docker/caddy/Caddyfile` — same pattern as Immich:
 
 ```
-camps.yourdomain.com {
-    # API calls go directly to the backend
+# CA Camp Finder
+http://camps.thewick.me {
     handle /api/* {
-        reverse_proxy localhost:8089
+        reverse_proxy 192.168.1.124:8089 {
+            header_up Host {host}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Port 443
+        }
     }
-    # Everything else is served by the Angular nginx container
     handle {
-        reverse_proxy localhost:8088
+        reverse_proxy 192.168.1.124:8088 {
+            header_up Host {host}
+            header_up X-Forwarded-Host {host}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Port 443
+        }
     }
 }
 ```
 
-Then reload Caddy: `caddy reload` (or `docker exec caddy caddy reload --config /etc/caddy/Caddyfile` if Caddy is containerized).
+Then reload Caddy:
 
-### 5. Start the stack
+```bash
+docker exec caddy caddy reload --config /etc/caddy/Caddyfile
+```
+
+### 5. Add Cloudflare tunnel public hostname
+
+In Cloudflare Zero Trust dashboard → Tunnels → your tunnel → Public Hostnames → Add:
+- **Subdomain**: `camps`
+- **Domain**: `thewick.me`
+- **Service**: `http://localhost:80` (Caddy, same as your other hostnames)
+
+### 7. Start the stack
 
 ```bash
 mkdir -p data
 docker compose up -d
 ```
 
-Visit your configured domain. The UI loads immediately; first availability check runs after the initial interval.
+Visit `https://camps.thewick.me`. The UI loads immediately; first availability check runs after the initial interval.
 
-### 6. Verify Pushover
+### 8. Verify Pushover
 
 In the Monitor tab, tap **Test Alert** — you should receive a test notification on your iPhone within seconds.
 
