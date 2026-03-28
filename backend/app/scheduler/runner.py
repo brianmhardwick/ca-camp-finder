@@ -4,7 +4,7 @@ Manages a single recurring job that checks all enabled locations.
 The interval is recalculated after each run based on the current cancellation window.
 """
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Optional
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -50,7 +50,7 @@ async def run_checks():
     from app.scrapers.crystal_cove import CrystalCoveScraper
     from app.notifications.pushover import send_availability_alert
 
-    _last_check = datetime.utcnow()
+    _last_check = datetime.now(timezone.utc)
 
     scraper_map = {
         "reserveca": ReserveCaliforniaScraper,
@@ -119,7 +119,7 @@ async def run_checks():
                         booking_url=result.booking_url,
                     )
                     if notified:
-                        log_entry.notified_at = datetime.utcnow()
+                        log_entry.notified_at = datetime.now(timezone.utc)
 
                 # Mark previously-found units as gone if they no longer appear
                 await _mark_stale(db, location, results)
@@ -170,7 +170,7 @@ def _reschedule():
     job = scheduler.get_job("availability_check")
     if job:
         job.reschedule(trigger=IntervalTrigger(minutes=interval))
-    _next_check = datetime.utcnow() + timedelta(minutes=interval)
+    _next_check = datetime.now(timezone.utc) + timedelta(minutes=interval)
     logger.info("Next check in %d minutes", interval)
 
 
@@ -187,7 +187,7 @@ def start_scheduler():
         coalesce=True,
     )
     scheduler.start()
-    _next_check = datetime.utcnow() + timedelta(minutes=interval)
+    _next_check = datetime.now(timezone.utc) + timedelta(minutes=interval)
     logger.info("Scheduler started. First check in %d minutes.", interval)
 
 

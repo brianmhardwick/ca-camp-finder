@@ -10,14 +10,14 @@ type Tab = 'monitor' | 'logs';
   standalone: true,
   imports: [CommonModule, MonitorTabComponent, LogsTabComponent],
   template: `
-    <div class="min-h-screen bg-slate-50">
+    <div class="min-h-screen bg-navy-900">
       <!-- Top nav -->
-      <header class="bg-white border-b border-slate-200 sticky top-0 z-40">
+      <header class="bg-navy-800 border-b border-navy-700 sticky top-0 z-40">
         <div class="max-w-2xl mx-auto px-4">
           <div class="flex items-center justify-between h-14">
             <div class="flex items-center gap-2">
               <span class="text-xl">🏕</span>
-              <span class="font-bold text-slate-900 text-lg tracking-tight">CA Camp Finder</span>
+              <span class="font-bold text-white text-lg tracking-tight">CA Camp Finder</span>
             </div>
             <!-- Tabs -->
             <nav class="flex">
@@ -25,8 +25,8 @@ type Tab = 'monitor' | 'logs';
                 *ngFor="let t of tabs"
                 (click)="activeTab = t.id"
                 [class]="activeTab === t.id
-                  ? 'px-4 h-14 text-sm font-semibold text-ocean-600 border-b-2 border-ocean-600'
-                  : 'px-4 h-14 text-sm font-medium text-slate-500 hover:text-slate-700 border-b-2 border-transparent'">
+                  ? 'px-4 h-14 text-sm font-semibold text-ocean-400 border-b-2 border-ocean-400'
+                  : 'px-4 h-14 text-sm font-medium text-slate-400 hover:text-slate-200 border-b-2 border-transparent'">
                 {{ t.label }}
               </button>
             </nav>

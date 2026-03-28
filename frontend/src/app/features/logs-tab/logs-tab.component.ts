@@ -16,19 +16,19 @@ import { Location } from '../../core/models/location.model';
       <!-- Filters -->
       <div class="flex flex-wrap items-center gap-3">
         <select [(ngModel)]="filterSlug" (ngModelChange)="onFilterChange()"
-                class="text-sm border border-slate-200 rounded-lg px-3 py-2 bg-white text-slate-700
+                class="text-sm border border-navy-600 rounded-lg px-3 py-2 bg-navy-800 text-slate-200
                        focus:outline-none focus:ring-2 focus:ring-ocean-500">
           <option value="">All Locations</option>
           <option *ngFor="let loc of locations" [value]="loc.slug">{{ loc.name }}</option>
         </select>
-        <span class="text-sm text-slate-400 ml-auto">{{ logs.length }} entries</span>
+        <span class="text-sm text-slate-500 ml-auto">{{ logs.length }} entries</span>
       </div>
 
       <!-- Empty state -->
       <div *ngIf="!loading && logs.length === 0"
-           class="card text-center py-12 text-slate-400">
+           class="card text-center py-12 text-slate-500">
         <p class="text-3xl mb-3">🏖️</p>
-        <p class="font-medium">No availability found yet</p>
+        <p class="font-medium text-slate-300">No availability found yet</p>
         <p class="text-sm mt-1">Results will appear here when campsites or rooms open up</p>
       </div>
 
@@ -36,7 +36,7 @@ import { Location } from '../../core/models/location.model';
       <div *ngIf="logs.length > 0" class="card overflow-x-auto p-0">
         <table class="w-full text-sm">
           <thead>
-            <tr class="text-left text-xs text-slate-400 uppercase tracking-wide border-b border-slate-100">
+            <tr class="text-left text-xs text-slate-500 uppercase tracking-wide border-b border-navy-700">
               <th class="px-4 py-3 font-medium">Status</th>
               <th class="px-4 py-3 font-medium">Location</th>
               <th class="px-4 py-3 font-medium">Unit</th>
@@ -48,37 +48,37 @@ import { Location } from '../../core/models/location.model';
           </thead>
           <tbody>
             <tr *ngFor="let log of logs; trackBy: trackById"
-                class="border-b border-slate-50 hover:bg-slate-50 transition-colors"
-                [class.opacity-50]="!log.still_available">
+                class="border-b border-navy-700/50 hover:bg-navy-700/30 transition-colors"
+                [class.opacity-40]="!log.still_available">
               <td class="px-4 py-3">
                 <span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full"
                       [class]="log.still_available
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-slate-100 text-slate-500'">
+                        ? 'bg-green-900/50 text-green-400 border border-green-700/50'
+                        : 'bg-navy-700 text-slate-500'">
                   <span class="w-1.5 h-1.5 rounded-full"
-                        [class]="log.still_available ? 'bg-green-500' : 'bg-slate-400'"></span>
+                        [class]="log.still_available ? 'bg-green-400' : 'bg-slate-600'"></span>
                   {{ log.still_available ? 'Available' : 'Gone' }}
                 </span>
               </td>
-              <td class="px-4 py-3 text-slate-700 font-medium">{{ log.location_name }}</td>
-              <td class="px-4 py-3 text-slate-600 max-w-xs truncate">{{ log.unit_description }}</td>
-              <td class="px-4 py-3 text-slate-600 whitespace-nowrap">
+              <td class="px-4 py-3 text-slate-200 font-medium">{{ log.location_name }}</td>
+              <td class="px-4 py-3 text-slate-400 max-w-xs truncate">{{ log.unit_description }}</td>
+              <td class="px-4 py-3 text-slate-300 whitespace-nowrap">
                 {{ log.check_in_date | date:'EEE, MMM d' }}
               </td>
-              <td class="px-4 py-3 text-slate-600">
+              <td class="px-4 py-3 text-slate-400">
                 {{ log.price_per_night ? (log.price_per_night | currency) : '—' }}
               </td>
-              <td class="px-4 py-3 text-slate-400 whitespace-nowrap text-xs">
-                {{ log.detected_at | date:'MMM d, h:mm a' }}
+              <td class="px-4 py-3 text-slate-500 whitespace-nowrap text-xs">
+                {{ log.detected_at | date:'MMM d, h:mm a':'America/Los_Angeles' }}
               </td>
               <td class="px-4 py-3">
                 <div class="flex items-center gap-2">
                   <a *ngIf="log.still_available" [href]="log.booking_url" target="_blank" rel="noopener"
-                     class="text-xs font-medium text-ocean-600 hover:underline whitespace-nowrap">
+                     class="text-xs font-medium text-ocean-400 hover:text-ocean-300 whitespace-nowrap">
                     Book →
                   </a>
                   <button (click)="deleteLog(log.id)"
-                          class="text-xs text-slate-300 hover:text-red-400 transition-colors">✕</button>
+                          class="text-xs text-slate-600 hover:text-red-400 transition-colors">✕</button>
                 </div>
               </td>
             </tr>

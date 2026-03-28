@@ -15,7 +15,7 @@ from app.scrapers.base import AvailabilityResult, BaseScraper
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://calirdr.usedirect.com/rdr/rdr/fd/camping/availability/site"
-BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/Web/#!park/{facility_id}/site/{unit_id}/{date}"
+BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/Web/#!park/{facility_id}"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
@@ -94,8 +94,6 @@ class ReserveCaliforniaScraper(BaseScraper):
 
             booking_url = BOOKING_DEEP_LINK.format(
                 facility_id=self.facility_id,
-                unit_id=unit_id,
-                date=check_in.strftime("%m/%d/%Y"),
             )
 
             results.append(
