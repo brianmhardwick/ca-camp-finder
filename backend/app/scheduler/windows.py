@@ -4,17 +4,17 @@ Intelligent cancellation window logic per scraper type.
 CA State Parks 48-hour policy:
 - Cancel 2+ days before check-in → refund minus $7.99 fee
 - Cancel within 48 hours → forfeit first night + $7.99 fee
-Peak days: Wed/Thu all day (48-hr deadline for Fri/Sat), Fri AM, evenings daily.
+Peak days: Wed/Thu all day (48-hr deadline for Fri/Sat), Fri AM.
 
 Crystal Pier Hotel 7-day cancellation policy:
 - Cancel 7+ days before check-in → full refund
 - Cancel within 7 days → $50 fee; within 48 hours → forfeit first night
-Peak days: Fri/Sat/Sun all day (7-day deadline for Fri/Sat/Sun arrivals), evenings daily.
+Peak days: Fri/Sat all day (7-day deadline for Fri/Sat arrivals).
 
 Campland on the Bay 72-hour cancellation policy:
 - Cancel 72+ hours before arrival → refund minus $30 fee
 - Cancel within 72 hours → forfeit first night
-Peak days: Tue/Wed/Thu all day (72-hr deadline for Fri/Sat/Sun arrivals), evenings daily.
+Peak days: Tue/Wed all day (72-hr deadline for Fri/Sat arrivals).
 """
 from datetime import datetime
 import pytz
@@ -34,10 +34,6 @@ def _is_ca_parks_peak() -> bool:
     hour = now.hour
     weekday = now.weekday()  # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
 
-    # Evening window every day 6–11 PM
-    if 18 <= hour < 23:
-        return True
-
     # Wednesday all day: 48-hr deadline for Friday check-ins
     if weekday == 2:
         return True
@@ -46,7 +42,7 @@ def _is_ca_parks_peak() -> bool:
     if weekday == 3:
         return True
 
-    # Friday morning: last-minute cancellations for Sat/Sun
+    # Friday morning: last-minute cancellations for Saturday
     if weekday == 4 and hour < 12:
         return True
 
@@ -57,41 +53,26 @@ def _is_crystal_pier_peak() -> bool:
     """Peak window for Crystal Pier Hotel (7-day cancellation policy).
 
     7-day deadlines fall on: Fri arrivals → deadline is Fri of prior week,
-    Sat → Sat prior week, Sun → Sun prior week.
-    So Fri/Sat/Sun all day are peak (people cancelling for next Fri/Sat/Sun).
+    Sat arrivals → Sat of prior week.
+    So Fri/Sat all day are peak (people cancelling for next Fri/Sat).
     """
     now = _now_pacific()
-    hour = now.hour
-    weekday = now.weekday()  # 4=Fri, 5=Sat, 6=Sun
+    weekday = now.weekday()  # 4=Fri, 5=Sat
 
-    # Evening window every day 6–11 PM
-    if 18 <= hour < 23:
-        return True
-
-    # Fri/Sat/Sun all day: 7-day deadline days
-    if weekday in (4, 5, 6):
-        return True
-
-    return False
+    # Fri/Sat all day: 7-day deadline days for Fri/Sat arrivals
+    return weekday in (4, 5)
 
 
 def _is_campland_peak() -> bool:
     """Peak window for Campland on the Bay (72-hour cancellation policy).
 
-    72-hour deadlines: Tue → Fri check-ins, Wed → Sat, Thu → Sun.
-    So Tue/Wed/Thu all day are peak.
+    72-hour deadlines: Tue → Fri check-ins, Wed → Sat check-ins.
+    Thu was the deadline for Sun check-ins, but we don't target Sun arrivals.
     """
     now = _now_pacific()
-    hour = now.hour
-    weekday = now.weekday()  # 1=Tue, 2=Wed, 3=Thu
+    weekday = now.weekday()  # 1=Tue, 2=Wed
 
-    if 18 <= hour < 23:
-        return True
-
-    if weekday in (1, 2, 3):
-        return True
-
-    return False
+    return weekday in (1, 2)
 
 
 def get_interval_for_scraper_type(scraper_type: str) -> int:
