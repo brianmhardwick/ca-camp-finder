@@ -7,7 +7,7 @@ and detect open site types for target Fri/Sat/Sun dates.
 Cancellation policy: 72-hour window
 - Cancel 72+ hours before arrival → full refund minus $30 fee
 - Cancel within 72 hours → forfeit first night
-Minimum stay: 2 nights on summer weekends (Fri–Sat), 3 nights on holidays.
+Minimum stay: 2 nights on weekends, 3 nights on holiday weekends.
 """
 import logging
 from datetime import date
@@ -56,7 +56,7 @@ class CamplandScraper(BaseScraper):
         """Navigate to Campland booking page and check availability for a date."""
         from playwright.async_api import TimeoutError as PlaywrightTimeout
 
-        # Campland uses a checkout date of check_in + 2 (minimum 2-night stay on weekends)
+        # Campland requires a 2-night minimum on weekends (3-night on holidays)
         from datetime import timedelta
         check_out = check_in + timedelta(days=2)
 
