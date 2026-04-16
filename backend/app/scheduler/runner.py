@@ -86,7 +86,7 @@ async def run_check_for_location(location_id: int):
     from app.scrapers.crystal_pier import CrystalPierScraper
     from app.scrapers.crystal_cove import CrystalCoveScraper
     from app.scrapers.campland import CamplandScraper
-    from app.notifications.pushover import send_availability_alert
+    from app.notifications.pushover import send_batch_alert
 
     scraper_map = {
         "reserveca": ReserveCaliforniaScraper,
@@ -122,6 +122,8 @@ async def run_check_for_location(location_id: int):
             )
             db.add(check_log)
 
+            new_results = []
+            new_log_entries = []
             for result in results:
                 existing = (
                     db.query(AvailabilityLog)
@@ -148,16 +150,20 @@ async def run_check_for_location(location_id: int):
                 )
                 db.add(log_entry)
                 db.flush()
+                new_results.append(result)
+                new_log_entries.append(log_entry)
 
-                notified = await send_availability_alert(
+            if new_results:
+                booking_url = new_results[0].booking_url
+                notified = await send_batch_alert(
                     location_name=location.name,
-                    unit_desc=result.unit_description,
-                    check_in_date=result.check_in_date,
-                    price=result.price_per_night,
-                    booking_url=result.booking_url,
+                    new_results=new_results,
+                    booking_url=booking_url,
                 )
                 if notified:
-                    log_entry.notified_at = datetime.now(timezone.utc)
+                    now = datetime.now(timezone.utc)
+                    for log_entry in new_log_entries:
+                        log_entry.notified_at = now
 
             await _mark_stale(db, location, results)
             db.commit()

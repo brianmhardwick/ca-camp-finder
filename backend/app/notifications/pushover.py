@@ -54,6 +54,58 @@ async def send_availability_alert(
         return False
 
 
+async def send_batch_alert(
+    location_name: str,
+    new_results: list,
+    booking_url: str,
+) -> bool:
+    """Send a single batched notification summarising all newly found units."""
+    if not settings.pushover_user_key or not settings.pushover_api_token:
+        return False
+    if not new_results:
+        return False
+
+    from collections import defaultdict
+    by_date: dict = defaultdict(list)
+    for r in new_results:
+        by_date[r.check_in_date].append(r.unit_description)
+
+    lines = []
+    for d in sorted(by_date):
+        units = by_date[d]
+        date_str = d.strftime("%a, %b %-d")
+        if len(units) <= 3:
+            lines.append(f"{date_str}: {', '.join(u.split('#')[-1].strip() if '#' in u else u for u in units)}")
+        else:
+            sample = ", ".join(u.split('#')[-1].strip() if '#' in u else u for u in units[:3])
+            lines.append(f"{date_str}: {sample} +{len(units) - 3} more")
+
+    total = len(new_results)
+    message = "\n".join(lines)
+
+    payload = {
+        "token": settings.pushover_api_token,
+        "user": settings.pushover_user_key,
+        "title": f"🏕 {location_name} — {total} site{'s' if total != 1 else ''} available!",
+        "message": message,
+        "url": booking_url,
+        "url_title": "Book Now →",
+        "priority": 1,
+        "sound": "bugle",
+        "timestamp": int(__import__("time").time()),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(PUSHOVER_API_URL, data=payload)
+            resp.raise_for_status()
+            logger.info("Pushover batch sent for %s (%d units)", location_name, total)
+            return True
+    except Exception as e:
+        logger.error("Pushover batch notification failed: %s", e)
+        return False
+
+
 async def send_test_notification() -> bool:
     """Send a test notification to verify credentials."""
     payload = {
