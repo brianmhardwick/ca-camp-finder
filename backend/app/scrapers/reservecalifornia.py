@@ -1,6 +1,6 @@
 """
-ReserveCA scraper using the unofficial Aspira/UseDirect JSON API.
-Endpoint: https://calirdr.usedirect.com/rdr/rdr/fd/camping/availability/site
+ReserveCA scraper using the Tyler Technologies Recreation Management API.
+Endpoint: https://california-rdr.prod.cali.rd12.recreation-management.tylerapp.com/rdr/search/grid
 """
 import json
 import logging
@@ -14,8 +14,8 @@ from app.scrapers.base import AvailabilityResult, BaseScraper
 
 logger = logging.getLogger(__name__)
 
-BASE_URL = "https://calirdr.usedirect.com/rdr/rdr/fd/camping/availability/site"
-BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/Web/#!park/{facility_id}"
+BASE_URL = "https://california-rdr.prod.cali.rd12.recreation-management.tylerapp.com/rdr/search/grid"
+BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/park/{place_id}/"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
@@ -31,14 +31,13 @@ class ReserveCaliforniaScraper(BaseScraper):
         cfg = json.loads(location.scraper_config)
         self.facility_id: int = cfg["facility_id"]
         self.unit_type_id: int = cfg.get("unit_type_id", 0)
+        self.place_id: int = cfg.get("place_id", self.facility_id)
 
     async def check_availability(self, dates: list[date]) -> list[AvailabilityResult]:
         results: list[AvailabilityResult] = []
         if not dates:
             return results
 
-        # Group dates into contiguous windows to minimize API calls
-        # Send one request per date as a 1-night stay check
         async with httpx.AsyncClient(timeout=30) as client:
             for check_in in dates:
                 check_out = check_in + timedelta(days=1)
@@ -56,15 +55,21 @@ class ReserveCaliforniaScraper(BaseScraper):
         self, client: httpx.AsyncClient, check_in: date, check_out: date
     ) -> list[AvailabilityResult]:
         payload = {
-            "FacilityId": str(self.facility_id),
-            "StartDate": check_in.strftime("%m-%d-%Y"),
-            "EndDate": check_out.strftime("%m-%d-%Y"),
-            "MinVehicleLength": 0,
-            "UnitTypeId": self.unit_type_id,
+            "FacilityId": self.facility_id,
+            "UnitSort": "availability",
+            "StartDate": check_in.strftime("%Y-%m-%d"),
+            "EndDate": check_out.strftime("%Y-%m-%d"),
+            "InSeasonOnly": True,
             "WebOnly": True,
             "IsADA": False,
-            "SleepingUnitId": 83,  # default sleeping unit
+            "RestrictADA": False,
             "UnitCategoryId": 0,
+            "SleepingUnitId": 0,
+            "MinVehicleLength": 0,
+            "UnitTypeId": self.unit_type_id,
+            "UnitTypesGroupIds": [],
+            "AmenityIds": [],
+            "CustomerId": 0,
         }
         resp = await client.post(BASE_URL, json=payload, headers=HEADERS)
         resp.raise_for_status()
@@ -72,15 +77,16 @@ class ReserveCaliforniaScraper(BaseScraper):
 
         results = []
         facility_data = data.get("Facility", {})
-        units = facility_data.get("Units", {})
+        units = facility_data.get("Units") or {}
+
+        # New API uses ISO datetime keys: "2026-07-18T00:00:00"
+        date_key = check_in.strftime("%Y-%m-%dT%H:%M:%S")
 
         for unit_id, unit in units.items():
             if not isinstance(unit, dict):
                 continue
-            slices = unit.get("Slices", {})
-            date_key = check_in.strftime("%-m/%-d/%Y")
-            # Try multiple date key formats
-            slice_data = slices.get(date_key) or slices.get(check_in.strftime("%m/%d/%Y"))
+            slices = unit.get("Slices") or {}
+            slice_data = slices.get(date_key)
             if not slice_data:
                 continue
 
@@ -88,19 +94,18 @@ class ReserveCaliforniaScraper(BaseScraper):
             if not is_available:
                 continue
 
-            unit_type = unit.get("UnitTypeName", "")
             unit_name = unit.get("Name", f"Site {unit_id}")
+            unit_type = unit.get("UnitTypeName") or ""
             price = self._parse_price(slice_data.get("Price"))
 
-            booking_url = BOOKING_DEEP_LINK.format(
-                facility_id=self.facility_id,
-            )
+            booking_url = BOOKING_DEEP_LINK.format(place_id=self.place_id)
+            desc = f"{unit_name} — {unit_type}" if unit_type else unit_name
 
             results.append(
                 AvailabilityResult(
                     location_id=self.location.id,
                     check_in_date=check_in,
-                    unit_description=f"{unit_name} — {unit_type}",
+                    unit_description=desc,
                     unit_id=str(unit_id),
                     unit_type=unit_type,
                     price_per_night=price,
