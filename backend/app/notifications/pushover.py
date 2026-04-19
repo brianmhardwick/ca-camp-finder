@@ -1,6 +1,6 @@
 """Pushover notification integration."""
 import logging
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Optional
 
@@ -17,6 +17,7 @@ async def send_availability_alert(
     location_name: str,
     unit_desc: str,
     check_in_date: date,
+    nights: int,
     price: Optional[Decimal],
     booking_url: str,
 ) -> bool:
@@ -28,8 +29,14 @@ async def send_availability_alert(
         logger.warning("Pushover credentials not configured — skipping notification")
         return False
 
+    checkout_date = check_in_date + timedelta(days=nights)
     price_str = f" · ${price:.0f}/night" if price else ""
-    message = f"{unit_desc}{price_str}\nCheck-in: {check_in_date.strftime('%a, %b %-d')}"
+    night_word = "night" if nights == 1 else "nights"
+    date_str = (
+        f"{check_in_date.strftime('%a, %b %-d')} → "
+        f"{checkout_date.strftime('%a, %b %-d')} ({nights} {night_word})"
+    )
+    message = f"{unit_desc}{price_str}\n{date_str}"
 
     payload = {
         "token": settings.pushover_api_token,

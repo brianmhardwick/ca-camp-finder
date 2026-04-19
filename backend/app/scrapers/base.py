@@ -16,6 +16,7 @@ class AvailabilityResult:
     unit_type: Optional[str]
     price_per_night: Optional[Decimal]
     booking_url: str
+    nights: int = 1
 
 
 class BaseScraper(ABC):

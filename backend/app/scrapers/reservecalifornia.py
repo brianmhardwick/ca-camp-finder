@@ -15,7 +15,6 @@ from app.scrapers.base import AvailabilityResult, BaseScraper
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://calirdr.usedirect.com/rdr/rdr/fd/camping/availability/site"
-BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/Web/#!park/{facility_id}"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
@@ -37,13 +36,14 @@ class ReserveCaliforniaScraper(BaseScraper):
         if not dates:
             return results
 
-        # Group dates into contiguous windows to minimize API calls
-        # Send one request per date as a 1-night stay check
         async with httpx.AsyncClient(timeout=30) as client:
             for check_in in dates:
-                check_out = check_in + timedelta(days=1)
+                # Friday check-ins: require 2 consecutive nights free (Fri→Sun).
+                # Sat check-ins stay 1-night (Sat→Sun) since Fri→Sun is a superset.
+                nights = 2 if check_in.weekday() == 4 else 1
+                check_out = check_in + timedelta(days=nights)
                 try:
-                    batch = await self._fetch_date(client, check_in, check_out)
+                    batch = await self._fetch_date(client, check_in, check_out, nights)
                     results.extend(batch)
                 except Exception as e:
                     logger.warning(
@@ -53,7 +53,7 @@ class ReserveCaliforniaScraper(BaseScraper):
         return results
 
     async def _fetch_date(
-        self, client: httpx.AsyncClient, check_in: date, check_out: date
+        self, client: httpx.AsyncClient, check_in: date, check_out: date, nights: int = 1
     ) -> list[AvailabilityResult]:
         payload = {
             "FacilityId": str(self.facility_id),
@@ -63,7 +63,7 @@ class ReserveCaliforniaScraper(BaseScraper):
             "UnitTypeId": self.unit_type_id,
             "WebOnly": True,
             "IsADA": False,
-            "SleepingUnitId": 83,  # default sleeping unit
+            "SleepingUnitId": 83,
             "UnitCategoryId": 0,
         }
         resp = await client.post(BASE_URL, json=payload, headers=HEADERS)
@@ -71,30 +71,30 @@ class ReserveCaliforniaScraper(BaseScraper):
         data = resp.json()
 
         results = []
-        facility_data = data.get("Facility", {})
-        units = facility_data.get("Units", {})
+        units = data.get("Facility", {}).get("Units", {})
 
         for unit_id, unit in units.items():
             if not isinstance(unit, dict):
                 continue
             slices = unit.get("Slices", {})
-            date_key = check_in.strftime("%-m/%-d/%Y")
-            # Try multiple date key formats
-            slice_data = slices.get(date_key) or slices.get(check_in.strftime("%m/%d/%Y"))
-            if not slice_data:
-                continue
 
-            is_available = slice_data.get("IsFree", False)
-            if not is_available:
+            # Verify every requested night is free for this unit
+            all_free = True
+            first_price = None
+            for offset in range(nights):
+                night = check_in + timedelta(days=offset)
+                sl = slices.get(night.strftime("%-m/%-d/%Y")) or slices.get(night.strftime("%m/%d/%Y"))
+                if not sl or not sl.get("IsFree", False):
+                    all_free = False
+                    break
+                if offset == 0:
+                    first_price = sl.get("Price")
+
+            if not all_free:
                 continue
 
             unit_type = unit.get("UnitTypeName", "")
             unit_name = unit.get("Name", f"Site {unit_id}")
-            price = self._parse_price(slice_data.get("Price"))
-
-            booking_url = BOOKING_DEEP_LINK.format(
-                facility_id=self.facility_id,
-            )
 
             results.append(
                 AvailabilityResult(
@@ -103,8 +103,9 @@ class ReserveCaliforniaScraper(BaseScraper):
                     unit_description=f"{unit_name} — {unit_type}",
                     unit_id=str(unit_id),
                     unit_type=unit_type,
-                    price_per_night=price,
-                    booking_url=booking_url,
+                    price_per_night=self._parse_price(first_price),
+                    booking_url=self.location.booking_url,
+                    nights=nights,
                 )
             )
         return results

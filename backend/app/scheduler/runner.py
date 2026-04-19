@@ -153,6 +153,7 @@ async def run_check_for_location(location_id: int):
                     location_name=location.name,
                     unit_desc=result.unit_description,
                     check_in_date=result.check_in_date,
+                    nights=result.nights,
                     price=result.price_per_night,
                     booking_url=result.booking_url,
                 )

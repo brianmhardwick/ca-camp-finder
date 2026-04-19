@@ -112,6 +112,7 @@ class CamplandScraper(BaseScraper):
                         unit_type="RV / Campsite",
                         price_per_night=price,
                         booking_url=url,
+                        nights=2,
                     )
                 )
             except Exception:
@@ -133,6 +134,7 @@ class CamplandScraper(BaseScraper):
                         unit_type=None,
                         price_per_night=None,
                         booking_url=url,
+                        nights=2,
                     )
                 )
 
