@@ -15,7 +15,10 @@ from app.scrapers.base import AvailabilityResult, BaseScraper
 logger = logging.getLogger(__name__)
 
 BASE_URL = "https://california-rdr.prod.cali.rd12.recreation-management.tylerapp.com/rdr/search/grid"
-BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/park/{place_id}/"
+# Unit-level deep link — opens the specific campsite page directly.
+# New ReserveCA site (Tyler Tech) uses /camping/{unit_id}/ for individual sites.
+BOOKING_DEEP_LINK = "https://www.reservecalifornia.com/camping/{unit_id}/"
+BOOKING_PARK_LINK = "https://www.reservecalifornia.com/park/{place_id}/"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
@@ -97,9 +100,9 @@ class ReserveCaliforniaScraper(BaseScraper):
             unit_name = unit.get("Name", f"Site {unit_id}")
             unit_type = unit.get("UnitTypeName") or ""
             price = self._parse_price(slice_data.get("Price"))
-
-            booking_url = BOOKING_DEEP_LINK.format(place_id=self.place_id)
             desc = f"{unit_name} — {unit_type}" if unit_type else unit_name
+
+            booking_url = BOOKING_DEEP_LINK.format(unit_id=unit_id)
 
             results.append(
                 AvailabilityResult(
