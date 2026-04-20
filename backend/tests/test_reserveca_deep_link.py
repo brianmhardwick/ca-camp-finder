@@ -1,13 +1,13 @@
 """
-Unit tests for ReserveCA booking URL deep-link construction.
+Unit tests for ReserveCA booking URL construction.
 
-Fixture is based on the real San Onofre – San Mateo site SM039
+The ReserveCA booking modal is an Angular overlay that doesn't update the
+address bar, so unit-level deep linking is not possible. The park page
+is the deepest achievable link. Site name in the notification message
+is what lets the user identify the specific spot.
+
+Fixture based on San Onofre – San Mateo site SM039
 (Hook Up E/W, $70/night, Fri Apr 24 2026) from a live screenshot.
-Unit ID 42280 is a stand-in; the real ID is assigned by the API at
-runtime — URL construction logic is what's under test here.
-
-Note: the remote migrated to the Tyler Technologies API; mock data uses
-the new ISO datetime slice keys ("2026-04-24T00:00:00").
 """
 import json
 from datetime import date
@@ -16,12 +16,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.scrapers.reservecalifornia import BOOKING_DEEP_LINK, BOOKING_PARK_LINK, ReserveCaliforniaScraper
+from app.scrapers.reservecalifornia import BOOKING_PARK_LINK, ReserveCaliforniaScraper
 
 _SM039_UNIT_ID = "42280"
 
-# Mirrors the Tyler Technologies API response shape for facility 686.
-# SM039 is free; SM040 is taken.
 MOCK_API_RESPONSE = {
     "Facility": {
         "FacilityId": 686,
@@ -62,20 +60,7 @@ def _mock_http(response_data: dict) -> MagicMock:
     return resp
 
 
-# ── template sanity ───────────────────────────────────────────────────────────
-
-def test_deep_link_template_targets_campsite():
-    """`BOOKING_DEEP_LINK` must use {unit_id}, not {place_id} or {facility_id}."""
-    assert "{unit_id}" in BOOKING_DEEP_LINK
-    assert "{place_id}" not in BOOKING_DEEP_LINK
-    assert "{facility_id}" not in BOOKING_DEEP_LINK
-    assert "/camping/" in BOOKING_DEEP_LINK
-
-
-def test_deep_link_template_renders():
-    url = BOOKING_DEEP_LINK.format(unit_id="42280")
-    assert url == "https://www.reservecalifornia.com/camping/42280/"
-
+# ── template ──────────────────────────────────────────────────────────────────
 
 def test_park_link_template_renders():
     url = BOOKING_PARK_LINK.format(place_id="686")
@@ -85,8 +70,8 @@ def test_park_link_template_renders():
 # ── scraper output ────────────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_booking_url_is_unit_deep_link():
-    """Generated URL must point to the specific campsite, not the park search page."""
+async def test_booking_url_points_to_park_page():
+    """URL goes to park page — deepest possible link given modal has no address bar URL."""
     scraper = ReserveCaliforniaScraper(_make_location())
 
     with patch("httpx.AsyncClient") as mock_cls:
@@ -98,9 +83,7 @@ async def test_booking_url_is_unit_deep_link():
 
     assert len(results) == 1
     url = results[0].booking_url
-    assert url == f"https://www.reservecalifornia.com/camping/{_SM039_UNIT_ID}/"
-    assert "/camping/" in url
-    assert "/park/" not in url
+    assert url == "https://www.reservecalifornia.com/park/686/"
 
 
 @pytest.mark.asyncio
@@ -121,7 +104,7 @@ async def test_only_free_units_returned():
 
 @pytest.mark.asyncio
 async def test_unit_description_includes_site_name_and_type():
-    """Notification message needs both site name and hook-up type readable at a glance."""
+    """Notification message needs site name (SM039) and type readable at a glance."""
     scraper = ReserveCaliforniaScraper(_make_location())
 
     with patch("httpx.AsyncClient") as mock_cls:
