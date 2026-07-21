@@ -66,14 +66,20 @@ async def send_batch_alert(
         return False
 
     from collections import defaultdict
-    by_date: dict = defaultdict(list)
+    from datetime import timedelta
+    by_window: dict = defaultdict(list)
     for r in new_results:
-        by_date[r.check_in_date].append(r.unit_description)
+        nights = getattr(r, "num_nights", 1) or 1
+        by_window[(r.check_in_date, nights)].append(r.unit_description)
 
     lines = []
-    for d in sorted(by_date):
-        units = by_date[d]
-        date_str = d.strftime("%a, %b %-d")
+    for (d, nights) in sorted(by_window):
+        units = by_window[(d, nights)]
+        if nights > 1:
+            check_out = d + timedelta(days=nights)
+            date_str = f"{d.strftime('%a, %b %-d')}–{check_out.strftime('%b %-d')} ({nights} nights)"
+        else:
+            date_str = d.strftime("%a, %b %-d")
         if len(units) <= 3:
             lines.append(f"{date_str}: {', '.join(u.split('#')[-1].strip() if '#' in u else u for u in units)}")
         else:

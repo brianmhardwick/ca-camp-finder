@@ -131,6 +131,7 @@ async def run_check_for_location(location_id: int):
                         AvailabilityLog.location_id == result.location_id,
                         AvailabilityLog.check_in_date == result.check_in_date,
                         AvailabilityLog.unit_id == result.unit_id,
+                        AvailabilityLog.num_nights == result.num_nights,
                         AvailabilityLog.still_available == True,
                     )
                     .first()
@@ -146,6 +147,7 @@ async def run_check_for_location(location_id: int):
                     unit_type=result.unit_type,
                     price_per_night=result.price_per_night,
                     booking_url=result.booking_url,
+                    num_nights=result.num_nights,
                     still_available=True,
                 )
                 db.add(log_entry)

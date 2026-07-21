@@ -42,20 +42,31 @@ class ReserveCaliforniaScraper(BaseScraper):
 
         async with httpx.AsyncClient(timeout=30) as client:
             for check_in in dates:
-                check_out = check_in + timedelta(days=1)
+                # 1-night query for every target date
                 try:
-                    batch = await self._fetch_date(client, check_in, check_out)
+                    batch = await self._fetch_date(client, check_in, nights=1)
                     results.extend(batch)
                 except Exception as e:
                     logger.warning(
                         "ReserveCA fetch failed for %s facility=%s date=%s: %s",
                         self.location.slug, self.facility_id, check_in, e
                     )
+                # Friday gets an additional 2-night (Fri–Sun) query
+                if check_in.weekday() == 4:
+                    try:
+                        batch = await self._fetch_date(client, check_in, nights=2)
+                        results.extend(batch)
+                    except Exception as e:
+                        logger.warning(
+                            "ReserveCA 2-night fetch failed for %s facility=%s date=%s: %s",
+                            self.location.slug, self.facility_id, check_in, e
+                        )
         return results
 
     async def _fetch_date(
-        self, client: httpx.AsyncClient, check_in: date, check_out: date
+        self, client: httpx.AsyncClient, check_in: date, nights: int = 1
     ) -> list[AvailabilityResult]:
+        check_out = check_in + timedelta(days=nights)
         payload = {
             "FacilityId": self.facility_id,
             "UnitSort": "availability",
@@ -112,6 +123,7 @@ class ReserveCaliforniaScraper(BaseScraper):
                     unit_type=unit_type,
                     price_per_night=price,
                     booking_url=booking_url,
+                    num_nights=nights,
                 )
             )
         return results
