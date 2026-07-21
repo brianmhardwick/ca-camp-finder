@@ -260,9 +260,12 @@ def remove_location_job(slug: str) -> None:
 
 
 def start_scheduler():
-    """Start APScheduler with one job per enabled location."""
+    """Start APScheduler with one job per enabled location plus the advance booking job."""
     from app.database import SessionLocal
     from app.models import Location
+    from app.scheduler.advance import run_advance_booking_check
+    from app.scheduler.windows import PACIFIC
+    from apscheduler.triggers.cron import CronTrigger
 
     db = SessionLocal()
     try:
@@ -271,6 +274,18 @@ def start_scheduler():
             _add_location_job(location)
     finally:
         db.close()
+
+    # Advance booking monitor: fires daily at 8:00 AM Pacific.
+    # Does real work only on days where today + 6 calendar months is a summer Friday.
+    scheduler.add_job(
+        run_advance_booking_check,
+        trigger=CronTrigger(hour=8, minute=0, timezone=PACIFIC),
+        id="advance_booking_check",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info("Advance booking job registered (daily 08:00 Pacific).")
 
     scheduler.start()
     logger.info("Scheduler started with %d location job(s).", len(_location_next_check))

@@ -112,6 +112,65 @@ async def send_batch_alert(
         return False
 
 
+async def send_advance_alert(
+    location_name: str,
+    new_results: list,
+    target_friday: "date",
+    booking_url: str,
+) -> bool:
+    """
+    Send a single batched alert when the 6-month booking window opens for a
+    summer weekend. Distinct from last-minute alerts — uses a calendar emoji
+    and shows the full weekend date range in the title.
+    """
+    if not settings.pushover_user_key or not settings.pushover_api_token:
+        return False
+    if not new_results:
+        return False
+
+    from datetime import timedelta
+    from collections import defaultdict
+
+    target_sunday = target_friday + timedelta(days=2)
+    weekend_str = (
+        f"{target_friday.strftime('%b %-d')}–{target_sunday.strftime('%-d')}"
+    )
+
+    lines = []
+    units = [r.unit_description for r in new_results]
+    if len(units) <= 4:
+        lines = [u.split("—")[0].strip() if "—" in u else u for u in units]
+    else:
+        sample = [u.split("—")[0].strip() if "—" in u else u for u in units[:4]]
+        lines = sample + [f"+{len(units) - 4} more"]
+
+    total = len(new_results)
+    payload = {
+        "token": settings.pushover_api_token,
+        "user": settings.pushover_user_key,
+        "title": f"📅 {location_name} — {weekend_str} just opened! ({total} site{'s' if total != 1 else ''})",
+        "message": "\n".join(lines),
+        "url": booking_url,
+        "url_title": "Book Now →",
+        "priority": 1,
+        "sound": "bugle",
+        "timestamp": int(__import__("time").time()),
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(PUSHOVER_API_URL, data=payload)
+            resp.raise_for_status()
+            logger.info(
+                "Advance alert sent for %s weekend %s (%d sites)",
+                location_name, weekend_str, total,
+            )
+            return True
+    except Exception as e:
+        logger.error("Advance alert failed: %s", e)
+        return False
+
+
 async def send_test_notification() -> bool:
     """Send a test notification to verify credentials."""
     payload = {
