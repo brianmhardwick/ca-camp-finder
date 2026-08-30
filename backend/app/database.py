@@ -29,6 +29,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
     _seed_locations()
     _migrate_scraper_configs()
+    _migrate_schema()
 
 
 # ReserveCA migrated to Tyler Technologies in 2025/2026.
@@ -125,6 +126,28 @@ def _seed_locations():
         db.commit()
     finally:
         db.close()
+
+
+def _migrate_schema():
+    """
+    Apply additive SQLite schema migrations that create_all() won't handle
+    (ALTER TABLE ADD COLUMN on existing tables).
+    Safe to run on every startup — each step is idempotent.
+    """
+    with engine.connect() as conn:
+        existing = {
+            row[1]
+            for row in conn.execute(
+                __import__("sqlalchemy").text("PRAGMA table_info(availability_log)")
+            )
+        }
+        if "num_nights" not in existing:
+            conn.execute(
+                __import__("sqlalchemy").text(
+                    "ALTER TABLE availability_log ADD COLUMN num_nights INTEGER DEFAULT 1"
+                )
+            )
+            conn.commit()
 
 
 def _migrate_scraper_configs():
