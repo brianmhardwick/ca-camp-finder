@@ -87,14 +87,6 @@ _SEED_DATA = [
         "booking_url": "https://www.reservecalifornia.com/Web/#!park/712/686",
         "scraper_config": '{"facility_id": 686, "unit_type_id": 29}',
     },
-    {
-        "name": "Campland on the Bay",
-        "slug": "campland",
-        "scraper_type": "campland",
-        "enabled": True,
-        "booking_url": "https://www.campland.com/",
-        "scraper_config": "{}",
-    },
 ]
 
 

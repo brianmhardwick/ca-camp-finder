@@ -7,7 +7,6 @@ const SCRAPER_ICONS: Record<string, string> = {
   reserveca: '⛺',
   crystal_pier: '🏖️',
   crystal_cove: '🌊',
-  campland: '🏕️',
 };
 
 interface LocationInfo {
@@ -23,10 +22,10 @@ interface LocationInfo {
 const LOCATION_INFO: Record<string, LocationInfo> = {
   reserveca: {
     cancellation: '48-hour policy — cancel 2+ days before check-in for a refund (minus $7.99 fee); cancelling within 48 hours forfeits the first night.',
-    minStay: 'No minimum — single nights are available.',
+    minStay: 'Friday check-ins require 2 nights (Fri+Sat); Saturday check-ins are 1 night.',
     howItWorks: 'Queries the ReserveCalifornia availability API directly for RV hookup sites (unit type 29). Results are near real-time and reliable.',
     peakSchedule: 'Every 15 min Wed & Thu all day (48-hr cancellation deadlines for Fri/Sat arrivals) and Fri before noon. Every 60 min at all other times.',
-    targetDates: 'Fri + Sat check-in dates for the next 2 weekends. Automatically pivots past the current weekend after Friday 9 AM Pacific when it\'s too late to realistically book.',
+    targetDates: 'Fri (2-night) + Sat (1-night) check-in dates for the next 2 weekends. Automatically pivots past the current weekend after Friday 9 AM Pacific.',
   },
   crystal_cove: {
     cancellation: '48-hour policy — cancel 2+ days before check-in for a refund (minus $7.99 fee); cancelling within 48 hours forfeits the first night.',
@@ -41,13 +40,6 @@ const LOCATION_INFO: Record<string, LocationInfo> = {
     howItWorks: 'Uses a headless browser (Playwright) to navigate the Crystal Pier reservations page and detect available cottage/room inventory. Slightly slower than API-based scrapers due to full page rendering.',
     peakSchedule: 'Every 15 min Fri & Sat all day — the 7-day deadline days when people cancel for the following Fri/Sat. Every 60 min otherwise.',
     targetDates: 'Off-season (Oct–mid Jun): Fri + Sat check-in dates. Summer (mid Jun–Sep): Thu + Fri check-in dates to accommodate the 3-night minimum stay. Covers the next 2 weekends.',
-  },
-  campland: {
-    cancellation: '72-hour policy — cancel 3+ days before arrival for a refund (minus a $30 fee); cancelling within 72 hours forfeits the first night.',
-    minStay: '2 nights on regular weekends; 3 nights on holiday weekends.',
-    howItWorks: 'Uses a headless browser (Playwright) to navigate the Campland booking calendar and detect open site types. Campland has no public API, so full page rendering is required.',
-    peakSchedule: 'Every 15 min Tue & Wed all day — the 72-hr cancellation deadlines for Fri & Sat arrivals. Every 60 min otherwise.',
-    targetDates: 'Fri + Sat check-in dates for the next 2 weekends. Pivots past the current weekend after Friday 9 AM Pacific.',
   },
 };
 

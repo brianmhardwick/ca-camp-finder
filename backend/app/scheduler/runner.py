@@ -85,14 +85,12 @@ async def run_check_for_location(location_id: int):
     from app.scrapers.reservecalifornia import ReserveCaliforniaScraper
     from app.scrapers.crystal_pier import CrystalPierScraper
     from app.scrapers.crystal_cove import CrystalCoveScraper
-    from app.scrapers.campland import CamplandScraper
     from app.notifications.pushover import send_availability_alert
 
     scraper_map = {
         "reserveca": ReserveCaliforniaScraper,
         "crystal_pier": CrystalPierScraper,
         "crystal_cove": CrystalCoveScraper,
-        "campland": CamplandScraper,
     }
 
     db = SessionLocal()

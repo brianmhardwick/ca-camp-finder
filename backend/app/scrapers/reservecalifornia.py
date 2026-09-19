@@ -41,7 +41,10 @@ class ReserveCaliforniaScraper(BaseScraper):
         # Send one request per date as a 1-night stay check
         async with httpx.AsyncClient(timeout=30) as client:
             for check_in in dates:
-                check_out = check_in + timedelta(days=1)
+                # Friday: query 2-night window (Fri→Sun) — most parks require 2-night min on weekends
+                # Saturday: query 1-night window (Sat→Sun)
+                nights = 2 if check_in.weekday() == 4 else 1
+                check_out = check_in + timedelta(days=nights)
                 try:
                     batch = await self._fetch_date(client, check_in, check_out)
                     results.extend(batch)
