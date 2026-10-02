@@ -64,20 +64,16 @@ def get_target_dates(scraper_type: str = "") -> list[date]:
         next_fri = today + timedelta(days=days_ahead)
 
     three_night = scraper_type == "crystal_pier" and _is_crystal_pier_summer()
-    # ReserveCA-backed scrapers use a 2-night Friday query that confirms the same
-    # site is free both Fri and Sat — no need to pass Saturday independently.
-    reserveca_types = {"reserveca", "crystal_cove"}
     dates = []
     for week in range(2):
         fri = next_fri + timedelta(weeks=week)
         if three_night:
             # Thu + Fri check-ins for 3-night stays (Thu→Sun, Fri→Mon)
             dates.extend([fri - timedelta(days=1), fri])
-        elif scraper_type in reserveca_types:
-            # Friday only; scraper issues a 2-night (Fri→Sun) query automatically
-            dates.append(fri)
         else:
-            # Fri + Sat check-ins for 1–2 night stays
+            # Fri (2-night Fri→Sun via scraper) + Sat (1-night Sat→Sun)
+            # The ReserveCA scraper issues a 2-night query for Friday check-ins
+            # automatically, so Friday never produces a false 1-night-only alert.
             dates.extend([fri, fri + timedelta(days=1)])
     return dates
 
