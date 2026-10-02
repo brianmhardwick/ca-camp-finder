@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 BASE_URL = "https://california-rdr.prod.cali.rd12.recreation-management.tylerapp.com/rdr/search/grid"
 # Unit-level deep link isn't possible — ReserveCA opens the booking modal as an
 # Angular overlay that doesn't update the address bar. Park page is the deepest link.
-BOOKING_PARK_LINK = "https://www.reservecalifornia.com/park/{place_id}/"
+BOOKING_PARK_LINK = "https://www.reservecalifornia.com/park/{place_id}/?startDate={start}&endDate={end}"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
@@ -42,25 +42,18 @@ class ReserveCaliforniaScraper(BaseScraper):
 
         async with httpx.AsyncClient(timeout=30) as client:
             for check_in in dates:
-                # 1-night query for every target date
+                # Friday: 2-night (Fri–Sun) query only — confirms the same site is free
+                # both nights before alerting. 1-night-only hits are not a bookable weekend.
+                # Non-Friday: 1-night query as before.
+                nights = 2 if check_in.weekday() == 4 else 1
                 try:
-                    batch = await self._fetch_date(client, check_in, nights=1)
+                    batch = await self._fetch_date(client, check_in, nights=nights)
                     results.extend(batch)
                 except Exception as e:
                     logger.warning(
-                        "ReserveCA fetch failed for %s facility=%s date=%s: %s",
-                        self.location.slug, self.facility_id, check_in, e
+                        "ReserveCA fetch failed for %s facility=%s date=%s nights=%d: %s",
+                        self.location.slug, self.facility_id, check_in, nights, e
                     )
-                # Friday gets an additional 2-night (Fri–Sun) query
-                if check_in.weekday() == 4:
-                    try:
-                        batch = await self._fetch_date(client, check_in, nights=2)
-                        results.extend(batch)
-                    except Exception as e:
-                        logger.warning(
-                            "ReserveCA 2-night fetch failed for %s facility=%s date=%s: %s",
-                            self.location.slug, self.facility_id, check_in, e
-                        )
         return results
 
     async def _fetch_date(
@@ -112,7 +105,11 @@ class ReserveCaliforniaScraper(BaseScraper):
             price = self._parse_price(slice_data.get("Price"))
             desc = f"{unit_name} — {unit_type}" if unit_type else unit_name
 
-            booking_url = BOOKING_PARK_LINK.format(place_id=self.place_id)
+            booking_url = BOOKING_PARK_LINK.format(
+                place_id=self.place_id,
+                start=check_in.strftime("%Y-%m-%d"),
+                end=check_out.strftime("%Y-%m-%d"),
+            )
 
             results.append(
                 AvailabilityResult(

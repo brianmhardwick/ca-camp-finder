@@ -1,14 +1,15 @@
 """
-Unit tests for ReserveCA scraper — booking URL construction and multi-night detection.
+Unit tests for ReserveCA scraper — booking URL construction and consecutive-night detection.
 
 Fixture based on San Onofre – San Mateo site SM039
 (Hook Up E/W, $70/night, Fri Apr 24 2026) from a live screenshot.
 
 Key behaviours under test:
-- 1-night query for every target date (Fri + Sat)
-- Additional 2-night query for Friday specifically (Fri–Sun)
-- num_nights field set correctly on results
-- Notification message distinguishes 1-night vs 2-night windows
+- Friday triggers exactly ONE API call (2-night Fri–Sun only)
+- Saturday triggers exactly ONE API call (1-night)
+- Friday results have num_nights=2 and booking URL with date params
+- No 1-night Friday results are produced (would be a false-positive weekend alert)
+- Notification message distinguishes multi-night windows
 """
 import json
 from datetime import date, timedelta
@@ -50,7 +51,7 @@ def _make_location(facility_id: int = 686) -> MagicMock:
     loc = MagicMock()
     loc.id = 1
     loc.slug = "san_onofre_san_mateo"
-    loc.scraper_config = json.dumps({"facility_id": facility_id, "unit_type_id": 29})
+    loc.scraper_config = json.dumps({"facility_id": facility_id, "unit_type_id": 29, "place_id": 712})
     return loc
 
 
@@ -64,51 +65,17 @@ def _mock_http(response_data: dict) -> MagicMock:
 # ── URL template ─────────────────────────────────────────────────────────────
 
 def test_park_link_template_renders():
-    url = BOOKING_PARK_LINK.format(place_id="686")
-    assert url == "https://www.reservecalifornia.com/park/686/"
+    url = BOOKING_PARK_LINK.format(place_id="686", start="2026-04-24", end="2026-04-26")
+    assert "reservecalifornia.com/park/686/" in url
+    assert "startDate=2026-04-24" in url
+    assert "endDate=2026-04-26" in url
 
 
-# ── 1-night baseline ──────────────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_friday_1night_result_has_num_nights_1():
-    scraper = ReserveCaliforniaScraper(_make_location())
-    friday = date(2026, 4, 24)  # Friday
-
-    with patch("httpx.AsyncClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_cls.return_value.__aenter__.return_value = mock_client
-        mock_client.post.return_value = _mock_http(MOCK_API_RESPONSE)
-
-        results = await scraper.check_availability([friday])
-
-    one_night = [r for r in results if r.num_nights == 1]
-    assert len(one_night) >= 1
-    assert one_night[0].unit_description.startswith("SM039")
-
+# ── Friday: 2-night only ──────────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_saturday_query_has_num_nights_1():
-    scraper = ReserveCaliforniaScraper(_make_location())
-    saturday = date(2026, 4, 25)  # Saturday — only 1-night, no 2-night query
-
-    with patch("httpx.AsyncClient") as mock_cls:
-        mock_client = AsyncMock()
-        mock_cls.return_value.__aenter__.return_value = mock_client
-        mock_client.post.return_value = _mock_http(MOCK_API_RESPONSE)
-
-        results = await scraper.check_availability([saturday])
-
-    assert all(r.num_nights == 1 for r in results)
-    # Saturday should only trigger 1 API call (no 2-night bonus)
-    assert mock_client.post.call_count == 1
-
-
-# ── 2-night Friday behaviour ─────────────────────────────────────────────────
-
-@pytest.mark.asyncio
-async def test_friday_triggers_two_api_calls():
-    """Friday should call the API twice: 1-night and 2-night."""
+async def test_friday_triggers_one_api_call():
+    """Friday should make exactly ONE call — the 2-night (Fri–Sun) query."""
     scraper = ReserveCaliforniaScraper(_make_location())
     friday = date(2026, 4, 24)
 
@@ -119,11 +86,12 @@ async def test_friday_triggers_two_api_calls():
 
         await scraper.check_availability([friday])
 
-    assert mock_client.post.call_count == 2
+    assert mock_client.post.call_count == 1
 
 
 @pytest.mark.asyncio
-async def test_friday_2night_result_has_num_nights_2():
+async def test_friday_result_has_num_nights_2():
+    """Friday query produces a 2-night result (the full Fri–Sun weekend)."""
     scraper = ReserveCaliforniaScraper(_make_location())
     friday = date(2026, 4, 24)
 
@@ -134,14 +102,14 @@ async def test_friday_2night_result_has_num_nights_2():
 
         results = await scraper.check_availability([friday])
 
-    two_night = [r for r in results if r.num_nights == 2]
-    assert len(two_night) == 1
-    assert two_night[0].unit_description.startswith("SM039")
+    assert len(results) == 1
+    assert results[0].num_nights == 2
+    assert results[0].unit_description.startswith("SM039")
 
 
 @pytest.mark.asyncio
-async def test_friday_produces_both_1night_and_2night_results():
-    """Same site on same Friday should appear twice: once per night-count."""
+async def test_friday_produces_no_1night_result():
+    """Friday must NOT produce a 1-night result — that would be a false-positive weekend alert."""
     scraper = ReserveCaliforniaScraper(_make_location())
     friday = date(2026, 4, 24)
 
@@ -152,9 +120,44 @@ async def test_friday_produces_both_1night_and_2night_results():
 
         results = await scraper.check_availability([friday])
 
-    assert len(results) == 2
-    night_counts = {r.num_nights for r in results}
-    assert night_counts == {1, 2}
+    assert all(r.num_nights == 2 for r in results)
+
+
+@pytest.mark.asyncio
+async def test_friday_booking_url_includes_dates():
+    """Booking URL should carry startDate/endDate so the park page can pre-fill the picker."""
+    scraper = ReserveCaliforniaScraper(_make_location())
+    friday = date(2026, 4, 24)  # Friday; 2-night → endDate = Apr 26
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.post.return_value = _mock_http(MOCK_API_RESPONSE)
+
+        results = await scraper.check_availability([friday])
+
+    assert results
+    url = results[0].booking_url
+    assert "startDate=2026-04-24" in url
+    assert "endDate=2026-04-26" in url
+
+
+# ── Saturday: 1-night ─────────────────────────────────────────────────────────
+
+@pytest.mark.asyncio
+async def test_saturday_query_has_num_nights_1():
+    scraper = ReserveCaliforniaScraper(_make_location())
+    saturday = date(2026, 4, 25)  # Saturday — 1-night query
+
+    with patch("httpx.AsyncClient") as mock_cls:
+        mock_client = AsyncMock()
+        mock_cls.return_value.__aenter__.return_value = mock_client
+        mock_client.post.return_value = _mock_http(MOCK_API_RESPONSE)
+
+        results = await scraper.check_availability([saturday])
+
+    assert all(r.num_nights == 1 for r in results)
+    assert mock_client.post.call_count == 1
 
 
 # ── notification formatting ───────────────────────────────────────────────────
@@ -171,12 +174,11 @@ def test_batch_alert_formats_2night_window():
         unit_id="42280",
         unit_type="Hook Up (E/W)",
         price_per_night=Decimal("70.00"),
-        booking_url="https://www.reservecalifornia.com/park/686/",
+        booking_url="https://www.reservecalifornia.com/park/712/?startDate=2026-04-24&endDate=2026-04-26",
         num_nights=2,
     )
 
     # Verify the date formatting logic directly
-    from datetime import timedelta
     d = result.check_in_date
     check_out = d + timedelta(days=result.num_nights)
     date_str = f"{d.strftime('%a, %b %-d')}–{check_out.strftime('%b %-d')} ({result.num_nights} nights)"

@@ -64,12 +64,18 @@ def get_target_dates(scraper_type: str = "") -> list[date]:
         next_fri = today + timedelta(days=days_ahead)
 
     three_night = scraper_type == "crystal_pier" and _is_crystal_pier_summer()
+    # ReserveCA-backed scrapers use a 2-night Friday query that confirms the same
+    # site is free both Fri and Sat — no need to pass Saturday independently.
+    reserveca_types = {"reserveca", "crystal_cove"}
     dates = []
     for week in range(2):
         fri = next_fri + timedelta(weeks=week)
         if three_night:
             # Thu + Fri check-ins for 3-night stays (Thu→Sun, Fri→Mon)
             dates.extend([fri - timedelta(days=1), fri])
+        elif scraper_type in reserveca_types:
+            # Friday only; scraper issues a 2-night (Fri→Sun) query automatically
+            dates.append(fri)
         else:
             # Fri + Sat check-ins for 1–2 night stays
             dates.extend([fri, fri + timedelta(days=1)])
@@ -215,7 +221,7 @@ async def _mark_stale(db, location, current_results):
     """Mark availability log entries as no longer available if not seen this check."""
     from app.models import AvailabilityLog
 
-    current_keys = {(r.unit_id, r.check_in_date) for r in current_results}
+    current_keys = {(r.unit_id, r.check_in_date, r.num_nights) for r in current_results}
     active_logs = (
         db.query(AvailabilityLog)
         .filter(
@@ -225,7 +231,7 @@ async def _mark_stale(db, location, current_results):
         .all()
     )
     for log in active_logs:
-        if (log.unit_id, log.check_in_date) not in current_keys:
+        if (log.unit_id, log.check_in_date, log.num_nights) not in current_keys:
             log.still_available = False
 
 
