@@ -11,7 +11,13 @@ from typing import Optional
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
-from app.scheduler.windows import get_interval_for_scraper_type, get_current_interval, _now_pacific
+from app.scheduler.season import is_in_season
+from app.scheduler.windows import (
+    OFFSEASON_INTERVAL_MINUTES,
+    get_interval_for_scraper_type,
+    get_current_interval,
+    _now_pacific,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +84,28 @@ def get_target_dates(scraper_type: str = "") -> list[date]:
     return dates
 
 
+def get_in_season_target_dates(scraper_type: str = "") -> list[date]:
+    """Target check-in dates restricted to the monitoring season.
+
+    Spec (2026-10-20): the cancellation watch only polls for arrivals inside
+    May 15 – Sep 15. Returns [] when no target date is in season — callers
+    treat that as offseason idle (no availability polling at all).
+    """
+    return [d for d in get_target_dates(scraper_type) if is_in_season(d)]
+
+
+def _reschedule_location_job(location, interval: int) -> None:
+    """Reschedule a location's job to the given interval (minutes)."""
+    job_id = f"check_{location.slug}"
+    job = scheduler.get_job(job_id)
+    if job:
+        job.reschedule(trigger=IntervalTrigger(minutes=interval))
+    _location_next_check[location.id] = (
+        datetime.now(timezone.utc) + timedelta(minutes=interval)
+    )
+    logger.info("Next check for %s in %d minutes", location.name, interval)
+
+
 async def run_check_for_location(location_id: int):
     """Run availability check for a single location, then reschedule its job."""
     global _location_last_check, _location_next_check
@@ -105,15 +133,26 @@ async def run_check_for_location(location_id: int):
             logger.info("Location %d not found or disabled, skipping", location_id)
             return
 
-        _location_last_check[location_id] = datetime.now(timezone.utc)
-
         scraper_cls = scraper_map.get(location.scraper_type)
         if not scraper_cls:
             logger.warning("No scraper for type: %s", location.scraper_type)
             return
 
+        # Seasonal gate (spec 2026-10-20): only poll for in-season arrivals.
+        # Offseason the job idles on a daily wake-up that re-checks the gate
+        # and performs no scraping at all.
+        dates = get_in_season_target_dates(location.scraper_type)
+        if not dates:
+            logger.info(
+                "%s: offseason — no in-season target dates, skipping check",
+                location.name,
+            )
+            _reschedule_location_job(location, OFFSEASON_INTERVAL_MINUTES)
+            return
+
+        _location_last_check[location_id] = datetime.now(timezone.utc)
+
         try:
-            dates = get_target_dates(location.scraper_type)
             scraper = scraper_cls(location)
             results = await scraper.check_availability(dates)
 
@@ -186,12 +225,7 @@ async def run_check_for_location(location_id: int):
 
         # Reschedule this location's job based on its scraper type
         interval = get_interval_for_scraper_type(location.scraper_type)
-        job_id = f"check_{location.slug}"
-        job = scheduler.get_job(job_id)
-        if job:
-            job.reschedule(trigger=IntervalTrigger(minutes=interval))
-        _location_next_check[location_id] = datetime.now(timezone.utc) + timedelta(minutes=interval)
-        logger.info("Next check for %s in %d minutes", location.name, interval)
+        _reschedule_location_job(location, interval)
 
     finally:
         db.close()
@@ -233,7 +267,13 @@ async def _mark_stale(db, location, current_results):
 
 def _add_location_job(location) -> None:
     """Add or replace an APScheduler job for a single location."""
-    interval = get_interval_for_scraper_type(location.scraper_type)
+    # Offseason registrations start on the daily idle cadence; the first run
+    # re-evaluates the season gate and switches to the normal interval when
+    # in-season target dates exist.
+    if get_in_season_target_dates(location.scraper_type):
+        interval = get_interval_for_scraper_type(location.scraper_type)
+    else:
+        interval = OFFSEASON_INTERVAL_MINUTES
     job_id = f"check_{location.slug}"
     scheduler.add_job(
         run_check_for_location,
@@ -265,7 +305,11 @@ def start_scheduler():
     """Start APScheduler with one job per enabled location plus the advance booking job."""
     from app.database import SessionLocal
     from app.models import Location
-    from app.scheduler.advance import run_advance_booking_check
+    from app.scheduler.advance import (
+        REPOLL_INTERVAL_MINUTES,
+        run_advance_booking_check,
+        run_advance_repoll_check,
+    )
     from app.scheduler.windows import PACIFIC
     from apscheduler.triggers.cron import CronTrigger
 
@@ -278,7 +322,8 @@ def start_scheduler():
         db.close()
 
     # Advance booking monitor: fires daily at 8:00 AM Pacific.
-    # Does real work only on days where today + 6 calendar months is a summer Friday.
+    # Does real work only on days where a booking window opens for an
+    # in-season Friday (ReserveCA +6 months, Crystal Pier +12 months).
     scheduler.add_job(
         run_advance_booking_check,
         trigger=CronTrigger(hour=8, minute=0, timezone=PACIFIC),
@@ -288,6 +333,22 @@ def start_scheduler():
         coalesce=True,
     )
     logger.info("Advance booking job registered (daily 08:00 Pacific).")
+
+    # Re-poll burst: retries the advance check every REPOLL_INTERVAL_MINUTES;
+    # the job itself no-ops outside the 08:00–11:00 Pacific burst window on
+    # window-open days, so a raced or errored 08:00 run cannot lose a weekend.
+    scheduler.add_job(
+        run_advance_repoll_check,
+        trigger=IntervalTrigger(minutes=REPOLL_INTERVAL_MINUTES),
+        id="advance_booking_repoll",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
+    logger.info(
+        "Advance booking re-poll job registered (every %d min, active 08:00–11:00 Pacific on open days).",
+        REPOLL_INTERVAL_MINUTES,
+    )
 
     scheduler.start()
     logger.info("Scheduler started with %d location job(s).", len(_location_next_check))

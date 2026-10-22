@@ -23,6 +23,13 @@ from app.config import settings
 
 PACIFIC = pytz.timezone("America/Los_Angeles")
 
+# Offseason idle cadence (monitoring spec, 2026-10-20): when none of a
+# location's target arrival dates are in season (May 15 – Sep 15, see
+# app/scheduler/season.py), its job drops to a single daily wake-up that
+# performs no scraping — it only re-evaluates the season gate, so polling
+# resumes automatically when in-season dates enter the target horizon.
+OFFSEASON_INTERVAL_MINUTES = 24 * 60
+
 
 def _now_pacific() -> datetime:
     return datetime.now(tz=PACIFIC)

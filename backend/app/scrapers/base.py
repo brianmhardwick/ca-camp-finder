@@ -7,6 +7,12 @@ from typing import Optional
 from app.models import Location
 
 
+class ScraperError(Exception):
+    """Raised when a scraper fails outright (as opposed to finding no
+    availability). Callers record this as an error CheckLog — a failed
+    scrape must never be logged as a successful check with 0 units."""
+
+
 @dataclass
 class AvailabilityResult:
     location_id: int

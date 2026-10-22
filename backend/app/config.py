@@ -10,8 +10,6 @@ class Settings(BaseSettings):
     default_check_interval: int = 60  # minutes
     peak_window_interval: int = 15  # minutes during peak cancellation windows
     log_level: str = "INFO"
-    # How many days ahead to scan for Fri/Sat/Sun availability
-    scan_days_ahead: int = 90
 
 
 settings = Settings()

@@ -45,7 +45,6 @@ def get_settings():
     return SettingsResponse(
         default_check_interval=settings.default_check_interval,
         peak_window_interval=settings.peak_window_interval,
-        scan_days_ahead=settings.scan_days_ahead,
     )
 
 
@@ -55,12 +54,9 @@ def update_settings(body: SettingsUpdate):
         settings.default_check_interval = body.default_check_interval
     if body.peak_window_interval is not None:
         settings.peak_window_interval = body.peak_window_interval
-    if body.scan_days_ahead is not None:
-        settings.scan_days_ahead = body.scan_days_ahead
     return SettingsResponse(
         default_check_interval=settings.default_check_interval,
         peak_window_interval=settings.peak_window_interval,
-        scan_days_ahead=settings.scan_days_ahead,
     )
 
 

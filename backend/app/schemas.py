@@ -88,10 +88,8 @@ class HealthResponse(BaseModel):
 class SettingsResponse(BaseModel):
     default_check_interval: int
     peak_window_interval: int
-    scan_days_ahead: int
 
 
 class SettingsUpdate(BaseModel):
     default_check_interval: Optional[int] = None
     peak_window_interval: Optional[int] = None
-    scan_days_ahead: Optional[int] = None

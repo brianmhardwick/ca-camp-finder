@@ -1,13 +1,22 @@
 """
-Advance booking window monitor for ReserveCA locations.
+Advance booking window monitor.
 
-California State Parks opens reservations exactly 6 calendar months to the day
-before check-in at 8:00 AM Pacific. This module fires once per week — on the
-morning a new summer Friday-Sunday becomes bookable — and alerts for any
-full-weekend (Fri–Sun, 2-night) availability at all enabled ReserveCA locations.
+Booking windows (Brian's monitoring spec, 2026-10-20):
+  * ReserveCA / Crystal Cove: reservations open exactly 6 calendar months to
+    the day before check-in at 8:00 AM Pacific.
+  * Crystal Pier: reservations open 12 calendar months out.
 
-Scheduling: CronTrigger at 08:00 America/Los_Angeles, daily.
-Fires meaningful work only on days where today + 6 months is a summer Friday.
+Only in-season arrival dates are targeted — Fridays inside the monitoring
+season (May 15 – Sep 15, see app/scheduler/season.py).
+
+Scheduling:
+  * Main job: CronTrigger at 08:00 America/Los_Angeles, daily. Checks every
+    window that opens today, plus a catch-up re-check of yesterday's openings
+    (in case the app was down or the 08:00 run errored).
+  * Re-poll burst: an interval job every REPOLL_INTERVAL_MINUTES re-runs
+    today's checks between 08:00 and REPOLL_END_HOUR Pacific on open days,
+    so a single raced/errored 08:00 shot can no longer lose a whole weekend.
+    AvailabilityLog de-duping guarantees no duplicate Pushover alerts.
 """
 import asyncio
 import calendar
@@ -17,13 +26,30 @@ from typing import Optional
 
 import pytz
 
+from app.scheduler.season import (
+    SEASON_END_DAY,
+    SEASON_END_MONTH,
+    SEASON_START_DAY,
+    SEASON_START_MONTH,
+    is_in_season,
+)
+
 logger = logging.getLogger(__name__)
 
 PACIFIC = pytz.timezone("America/Los_Angeles")
 
-# Summer season: May 15 – September 30 (the dates users want to book)
-SUMMER_START_MONTH, SUMMER_START_DAY = 5, 15
-SUMMER_END_MONTH, SUMMER_END_DAY = 9, 30
+# Kept as aliases of the shared season constants (single source of truth).
+SUMMER_START_MONTH, SUMMER_START_DAY = SEASON_START_MONTH, SEASON_START_DAY
+SUMMER_END_MONTH, SUMMER_END_DAY = SEASON_END_MONTH, SEASON_END_DAY
+
+# Booking-window lengths, in calendar months.
+RESERVECA_ADVANCE_MONTHS = 6
+CRYSTAL_PIER_ADVANCE_MONTHS = 12
+
+# Re-poll burst on window-open mornings: repeat today's checks every
+# REPOLL_INTERVAL_MINUTES until REPOLL_END_HOUR Pacific.
+REPOLL_INTERVAL_MINUTES = 15
+REPOLL_END_HOUR = 11
 
 
 def add_calendar_months(d: date, months: int) -> date:
@@ -36,71 +62,131 @@ def add_calendar_months(d: date, months: int) -> date:
 
 
 def is_summer_weekend(d: date) -> bool:
-    """True if date falls within May 15 – September 30 of the same year."""
-    start = date(d.year, SUMMER_START_MONTH, SUMMER_START_DAY)
-    end = date(d.year, SUMMER_END_MONTH, SUMMER_END_DAY)
-    return start <= d <= end
+    """True if the arrival date is inside the monitoring season (May 15 – Sep 15)."""
+    return is_in_season(d)
 
 
-def get_advance_target_friday() -> Optional[date]:
+def get_advance_friday(today: date, months: int) -> Optional[date]:
     """
-    Returns the Friday that opens its booking window today (today + 6 calendar
-    months), if that Friday falls in the summer window. Otherwise returns None.
-
-    Called daily at 8 AM Pacific — returns a non-None value about once per week.
+    The Friday whose booking window opens `today` for a `months`-ahead
+    booking window, if that Friday is an in-season arrival. Otherwise None.
     """
-    today = datetime.now(tz=PACIFIC).date()
-    target = add_calendar_months(today, 6)
+    target = add_calendar_months(today, months)
     if target.weekday() == 4 and is_summer_weekend(target):
         return target
     return None
 
 
-async def run_advance_booking_check():
+def get_advance_targets(today: date) -> list[tuple[str, date]]:
     """
-    Daily 8 AM Pacific job. Checks all enabled ReserveCA locations for
-    Fri–Sun 2-night availability on the weekend whose booking window opens today.
-    Sends one batch alert per location; deduplicates via AvailabilityLog.
+    All (window, friday) pairs whose booking windows open today.
+
+    window is "reserveca" (6-month window) or "crystal_pier" (12-month).
     """
-    target_friday = get_advance_target_friday()
-    if target_friday is None:
-        return
+    targets: list[tuple[str, date]] = []
+    friday = get_advance_friday(today, RESERVECA_ADVANCE_MONTHS)
+    if friday:
+        targets.append(("reserveca", friday))
+    friday = get_advance_friday(today, CRYSTAL_PIER_ADVANCE_MONTHS)
+    if friday:
+        targets.append(("crystal_pier", friday))
+    return targets
 
-    target_saturday = target_friday + timedelta(days=1)
-    logger.info(
-        "Advance booking window opening for %s–%s — scanning ReserveCA locations",
-        target_friday, target_saturday,
-    )
 
+def get_advance_target_friday() -> Optional[date]:
+    """
+    Returns the Friday that opens its ReserveCA booking window today
+    (today + 6 calendar months), if that Friday falls in the season window.
+    Otherwise returns None.
+
+    Called daily at 8 AM Pacific — returns a non-None value about once per week.
+    """
+    today = datetime.now(tz=PACIFIC).date()
+    return get_advance_friday(today, RESERVECA_ADVANCE_MONTHS)
+
+
+def repoll_is_active(now: datetime) -> bool:
+    """True during the re-poll burst window (08:00–11:00 Pacific) on a day
+    where at least one booking window opens."""
+    return 8 <= now.hour < REPOLL_END_HOUR and bool(get_advance_targets(now.date()))
+
+
+async def _check_window(window: str, target_friday: date):
+    """Run the advance check for one booking window on one target Friday."""
     from app.database import SessionLocal
     from app.models import Location
+
+    scraper_types = (
+        ["reserveca", "crystal_cove"] if window == "reserveca" else ["crystal_pier"]
+    )
 
     db = SessionLocal()
     try:
         locations = db.query(Location).filter(
             Location.enabled.is_(True),
-            Location.scraper_type.in_(["reserveca", "crystal_cove"]),
+            Location.scraper_type.in_(scraper_types),
         ).all()
         location_ids = [loc.id for loc in locations]
     finally:
         db.close()
 
     if not location_ids:
-        logger.info("No enabled ReserveCA locations for advance booking check.")
+        logger.info("No enabled %s locations for advance booking check.", window)
         return
 
+    logger.info(
+        "Advance booking (%s): window open for Fri %s — scanning %d location(s)",
+        window, target_friday, len(location_ids),
+    )
     await asyncio.gather(*[
         _check_location_advance(loc_id, target_friday)
         for loc_id in location_ids
     ])
 
 
+async def run_advance_booking_check():
+    """
+    Daily 8 AM Pacific job. Checks every booking window that opens today
+    (ReserveCA 6-month, Crystal Pier 12-month) for in-season Fridays, plus a
+    catch-up re-check of yesterday's openings in case yesterday's run was
+    missed or errored. De-duping via AvailabilityLog prevents double alerts.
+    """
+    today = datetime.now(tz=PACIFIC).date()
+    targets = list(get_advance_targets(today))
+
+    yesterday_targets = get_advance_targets(today - timedelta(days=1))
+    if yesterday_targets:
+        logger.info(
+            "Advance booking catch-up: re-checking yesterday's opening(s) %s",
+            yesterday_targets,
+        )
+        targets.extend(yesterday_targets)
+
+    for window, target_friday in targets:
+        await _check_window(window, target_friday)
+
+
+async def run_advance_repoll_check():
+    """
+    Re-poll burst job (every REPOLL_INTERVAL_MINUTES). No-ops except between
+    08:00 and REPOLL_END_HOUR Pacific on days a booking window opens, when it
+    repeats today's advance checks so a failed or raced 08:00 run is retried.
+    """
+    now = datetime.now(tz=PACIFIC)
+    if not repoll_is_active(now):
+        return
+    logger.info("Advance booking re-poll burst for %s", now.date())
+    for window, target_friday in get_advance_targets(now.date()):
+        await _check_window(window, target_friday)
+
+
 async def _check_location_advance(location_id: int, target_friday: date):
-    """Check one ReserveCA location for full-weekend (Fri–Sun) availability."""
+    """Check one location for availability on the advance target Friday."""
     from app.database import SessionLocal
     from app.models import Location, AvailabilityLog, CheckLog
     from app.scrapers.reservecalifornia import ReserveCaliforniaScraper
     from app.scrapers.crystal_cove import CrystalCoveScraper
+    from app.scrapers.crystal_pier import CrystalPierScraper
     from app.notifications.pushover import send_advance_alert
 
     db = SessionLocal()
@@ -109,17 +195,25 @@ async def _check_location_advance(location_id: int, target_friday: date):
         if not location or not location.enabled:
             return
 
-        scraper_cls = (
-            CrystalCoveScraper if location.scraper_type == "crystal_cove"
-            else ReserveCaliforniaScraper
-        )
+        if location.scraper_type == "crystal_cove":
+            scraper_cls = CrystalCoveScraper
+        elif location.scraper_type == "crystal_pier":
+            scraper_cls = CrystalPierScraper
+        else:
+            scraper_cls = ReserveCaliforniaScraper
 
         try:
             scraper = scraper_cls(location)
-            # check_availability fires both 1-night and 2-night for Fridays;
-            # we only want the 2-night (Fri–Sun) results for advance booking.
             all_results = await scraper.check_availability([target_friday])
-            results = [r for r in all_results if r.num_nights == 2]
+            if location.scraper_type == "crystal_pier":
+                # Hotel results are per-night stays (num_nights=1); a hit on
+                # the target Friday means a room is open for that arrival.
+                results = list(all_results)
+            else:
+                # ReserveCA check_availability fires both 1-night and 2-night
+                # for Fridays; advance booking only wants the 2-night
+                # (Fri–Sun) results.
+                results = [r for r in all_results if r.num_nights == 2]
 
             db.add(CheckLog(
                 location_id=location.id,
@@ -174,7 +268,7 @@ async def _check_location_advance(location_id: int, target_friday: date):
 
             db.commit()
             logger.info(
-                "Advance booking: %s — %d new Fri–Sun site(s) for %s",
+                "Advance booking: %s — %d new site(s) for %s",
                 location.name, len(new_results), target_friday,
             )
 

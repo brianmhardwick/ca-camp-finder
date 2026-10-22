@@ -8,7 +8,7 @@ import logging
 from datetime import date
 from typing import Optional
 
-from app.scrapers.base import AvailabilityResult, BaseScraper
+from app.scrapers.base import AvailabilityResult, BaseScraper, ScraperError
 
 logger = logging.getLogger(__name__)
 
@@ -21,11 +21,16 @@ class CrystalPierScraper(BaseScraper):
     async def check_availability(self, dates: list[date]) -> list[AvailabilityResult]:
         try:
             from playwright.async_api import async_playwright
-        except ImportError:
-            logger.error("Playwright not installed. Cannot scrape Crystal Pier.")
-            return []
+        except ImportError as e:
+            # A missing Playwright is a failed scrape, not "no availability" —
+            # raise so the caller logs an error CheckLog instead of "ok"/0.
+            raise ScraperError(
+                "Playwright not installed. Cannot scrape Crystal Pier."
+            ) from e
 
         results: list[AvailabilityResult] = []
+        failures = 0
+        last_error: Optional[Exception] = None
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
@@ -42,9 +47,19 @@ class CrystalPierScraper(BaseScraper):
                     found = await self._check_date(page, check_in)
                     results.extend(found)
                 except Exception as e:
+                    failures += 1
+                    last_error = e
                     logger.warning("Crystal Pier check failed for %s: %s", check_in, e)
 
             await browser.close()
+
+        if dates and failures == len(dates):
+            # Every date failed (e.g. site unreachable / TLS blocked): this is
+            # a failed scrape. Raising makes the caller write an error
+            # CheckLog instead of a misleading "ok" with 0 units.
+            raise ScraperError(
+                f"Crystal Pier scrape failed for all {len(dates)} date(s): {last_error}"
+            )
         return results
 
     async def _check_date(self, page, check_in: date) -> list[AvailabilityResult]:

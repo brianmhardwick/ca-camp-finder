@@ -55,10 +55,12 @@ def test_before_summer_start():
 
 
 def test_summer_end_boundary():
-    assert is_summer_weekend(date(2026, 9, 30)) is True
+    # Season ends Sep 15 per Brian's 2026-10-20 spec (was Sep 30).
+    assert is_summer_weekend(date(2026, 9, 15)) is True
 
 
 def test_after_summer_end():
+    assert is_summer_weekend(date(2026, 9, 16)) is False
     assert is_summer_weekend(date(2026, 10, 1)) is False
 
 
@@ -131,10 +133,10 @@ def test_6month_booking_window_examples():
     """Round-trip: for every summer Friday, going back 6 months then forward 6 months returns the same date."""
     from datetime import timedelta
 
-    # Collect all Fridays in the 2026 summer window
+    # Collect all Fridays in the 2026 summer window (May 15 – Sep 15)
     summer_fridays = []
     d = date(2026, 5, 15)
-    while d <= date(2026, 9, 30):
+    while d <= date(2026, 9, 15):
         if d.weekday() == 4:  # Friday
             summer_fridays.append(d)
         d += timedelta(days=1)
